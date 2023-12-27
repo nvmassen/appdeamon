@@ -1,0 +1,22 @@
+---
+global_modules:
+  - SensorObject
+
+hello_world:
+  module: hello
+  class: HelloWorld
+
+test_niels:
+  module: test
+  class: light_on
+
+update_energy_sensors:
+  module: update_energy_sensors
+  class: UpdateEnergySensors
+  global_dependencies:
+    - SensorObject
+
+#energy_management_EV:
+  #module: energy_management_EV
+  #class: EnergyManagementEV
+  
