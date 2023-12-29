@@ -2,12 +2,11 @@ from statistics import mean
 from datetime import datetime, timedelta, date
 from Helpers.SensorObject import SensorObject, EnergySensor
 import re
-import mqttapi as mqtt
+import appdaemon.plugins.mqtt.mqttapi as mqtt
 import calendar
-monthly_energy_prices = [""]
 
 
-class UpdateEnergySensors(SensorObject):
+class EnergyManagementEV(SensorObject):
 
   def initialize(self):
 
@@ -16,9 +15,11 @@ class UpdateEnergySensors(SensorObject):
     self.read_sensors_from_namespace(*self.get_sensors())
     self.update_sensors_HA(*self.get_sensors())
 
+    self.listen_state(self.car_charging_now, "input_boolean.ev_charge_now")
+    self.listen_state(self.car_charging_now, "binary_sensor.car_charging_peak_consumption_above_limit")
+
     ###Functions
 
-    #to test the functions which run at a certain time: "(datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S")"
 
     ###update once a day belpex monthly price
     #self.run_daily(self.update_belpex_monthly_price, "16:00:01")
@@ -53,3 +54,28 @@ class UpdateEnergySensors(SensorObject):
     return
     #Monthly Belpex price and amount of days to calculate monthly Belpex price
     #self.add_sensor(EnergySensor("sensor.belpex_monthly_price", "Belpex Monthly Price", "EUR/kWh"))
+
+  def car_charging_now(self, *args, **kwargs):
+    '''
+    Function to switch on and off the charging of the EV
+    '''
+
+    boiler_charging_needed = True if self.entities.binary_sensor.boiler_charging_needed == "on" else False
+    charge_now = True if self.entities.input_boolean.ev_charge_now.state == "on" else False
+    peak_consumption_above_limit = True if self.entities.binary_sensor.car_charging_peak_consumption_above_limit == "on" else False
+    charging_on = True if self.entities.switch.stopcontact_wagen == "on" else False
+
+    #self.log(entity)
+    #self.log(new)
+    self.log(args)
+
+    if charge_now:
+      #self.turn_off("automation.car_charging_off_coming_home_after_work")
+      #self.turn_off("automation.car_charging_off_day_cloudy")
+      #self.turn_off("automation.car_charging_off_day_sunny")
+      #self.turn_off("automation.car_charging_off_night")
+      if not peak_consumption_above_limit:
+        while not charging_on:
+          self.turn_on("switch.stopcontact_wagen")
+          charging_on = True if self.entities.switch.stopcontact_wagen == "on" else False
+      

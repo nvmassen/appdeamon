@@ -1,6 +1,7 @@
 ---
-global_modules:
-  - SensorObject
+sensor_object:
+  module: SensorObject
+  global: true
 
 hello_world:
   module: hello
@@ -13,10 +14,11 @@ test_niels:
 update_energy_sensors:
   module: update_energy_sensors
   class: UpdateEnergySensors
-  global_dependencies:
-    - SensorObject
+  dependencies:
+    - sensor_object
 
-#energy_management_EV:
-  #module: energy_management_EV
-  #class: EnergyManagementEV
-  
+energy_management_EV:
+  module: energy_management_EV 
+  class: EnergyManagementEV
+  dependencies:
+    - sensor_object 

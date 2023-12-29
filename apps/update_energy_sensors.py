@@ -2,7 +2,7 @@ from statistics import mean
 from datetime import datetime, timedelta, date
 from Helpers.SensorObject import SensorObject, EnergySensor
 import re
-import mqttapi as mqtt
+import appdaemon.plugins.mqtt.mqttapi as mqtt
 import calendar
 monthly_energy_prices = [""]
 
@@ -85,7 +85,7 @@ class UpdateEnergySensors(SensorObject):
       self.add_sensor(EnergySensor(f"sensor.monthly_energy_price_production_normal_{i}", temp[i-1], "EUR/kWh"))
       self.add_sensor(EnergySensor(f"sensor.monthly_energy_price_production_low_{i}", temp[i-1], "EUR/kWh"))
 
-  def update_belpex_monthly_price(self, event_name):
+  def update_belpex_monthly_price(self, **kwargs):
     '''
     Update belpex monthly price with 
     '''
@@ -117,7 +117,7 @@ class UpdateEnergySensors(SensorObject):
     self.update_sensors_HA("sensor.belpex_monthly_price","sensor.belpex_monthly_price_amount_of_days")
 
 
-  def update_monthly_energy_prices(self, event_name):
+  def update_monthly_energy_prices(self, **kwargs):
     '''
     Update monthly energy prices once a day
     '''
@@ -159,7 +159,7 @@ class UpdateEnergySensors(SensorObject):
     self.update_sensors_HA("sensor.monthly_energy_price_consumption_normal","sensor.monthly_energy_price_consumption_low","sensor.monthly_energy_price_production_normal","sensor.monthly_energy_price_production_low","sensor.monthly_energy_price_amount_of_days")
 
 
-  def update_monthly_values_db(self, event_name):
+  def update_monthly_values_db(self, **kwargs):
     if (date.today().day == 1):
 
       #Get current month and year to update friendly name sensors
@@ -237,7 +237,7 @@ class UpdateEnergySensors(SensorObject):
       self.update_sensors_HA("sensor.DSMR_quarterly_peak")
 
 
-  def update_quarterly_peak(self, event_name):
+  def update_quarterly_peak(self, **kwargs):
     #FOR USE WHEN RECEIVING MONTHLY PEAK FROM MQTT
     '''
     Listen to the MQTT server and parse the incoming telegrams
@@ -255,7 +255,7 @@ class UpdateEnergySensors(SensorObject):
 
     value = self.get_state("sensor.p1_meter_peak_demand_current_month")
 
-    self.log(value)
+    self.log(f"The peak value is: {value} W")
 
     if value is not None:
       value = int(value)/1000 #conversion from W to kW
@@ -264,9 +264,7 @@ class UpdateEnergySensors(SensorObject):
       self.set_sensor_value("sensor.DSMR_quarterly_peak", value)
       self.write_sensors_to_namespace("sensor.DSMR_quarterly_peak")
 
-      self.print_sensors("sensor.DSMR_quarterly_peak")
-
-
+  #!!! Check *args and **kwargs!!
   def on_telegram(self, event_name, data, kwargs):
     '''
     Parse the incoming telegrams and update the corresponding sensors
