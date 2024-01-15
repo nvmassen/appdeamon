@@ -1,11 +1,11 @@
 ---
-sensor_object:
-  module: SensorObject
+ad_helpers:
+  module: ad_helpers
   global: true
 
-hello_world:
-  module: hello
-  class: HelloWorld
+start_up:
+  module: start_up
+  class: StartUp
 
 test_niels:
   module: test
@@ -15,10 +15,15 @@ update_energy_sensors:
   module: update_energy_sensors
   class: UpdateEnergySensors
   dependencies:
-    - sensor_object
+    - ad_helpers
 
 energy_management_EV:
   module: energy_management_EV 
   class: EnergyManagementEV
   dependencies:
-    - sensor_object 
+    - ad_helpers
+
+workstation:
+
+  switch_entity: 'input_boolean.stopcontact_wagen_test'
+  sensor_entity: 'sensor.power_production_w'

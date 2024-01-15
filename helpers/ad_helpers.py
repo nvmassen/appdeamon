@@ -62,7 +62,7 @@ class EnergySensor():
     Represents a sensor with the following attributes: "name","value","friendly_name","unit_of_measurement"
     """
 
-    def __init__(self, name, friendly_name, unit_of_measurement, value=0):
+    def __init__(self, name, friendly_name="", unit_of_measurement="", value=0):
         self.name = name
         self.value = value
         self.friendly_name = friendly_name
@@ -72,3 +72,18 @@ class EnergySensor():
     def __str__(self):
         output = f"Name: {self.name}\nFriendly name: {self.friendly_name}\nValue: {self.value}\nUnit: {self.unit_of_measurement}"
         return output
+    
+    
+# A python program to create user-defined exceptions
+# class LookUpError is derived from super class Exception
+class AvailabilityError(Exception):
+ 
+    # Constructor or Initializer
+    def __init__(self, value):
+        self.value = value
+ 
+    # __str__ is to print() the value
+    def __str__(self):
+        return(repr(self.value))
+ 
+ 

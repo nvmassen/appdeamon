@@ -1,6 +1,6 @@
 from statistics import mean
 from datetime import datetime, timedelta, date
-from Helpers.SensorObject import SensorObject, EnergySensor
+from helpers.ad_helpers import SensorObject, EnergySensor
 import re
 import appdaemon.plugins.mqtt.mqttapi as mqtt
 import calendar
@@ -47,7 +47,7 @@ class UpdateEnergySensors(SensorObject):
 
 
     ###Function to manualy input values in appdaemon database
-    self.set_sensors()
+    #self.set_sensors()
 
   def add_sensors(self):
     #Monthly Belpex price and amount of days to calculate monthly Belpex price
@@ -121,11 +121,14 @@ class UpdateEnergySensors(SensorObject):
     '''
     Update monthly energy prices once a day
     '''
-
-    daily_energy_price_consumption_normal = float(self.get_state(f"sensor.consumption_tarive_normal"))
-    daily_energy_price_consumption_low = float(self.get_state(f"sensor.consumption_tarive_low"))
-    daily_energy_price_production_normal = float(self.get_state(f"sensor.production_tarive_normal"))
-    daily_energy_price_production_low = float(self.get_state(f"sensor.production_tarive_low"))
+    try:
+      daily_energy_price_consumption_normal = float(self.get_state(f"sensor.consumption_tarive_normal"))
+      daily_energy_price_consumption_low = float(self.get_state(f"sensor.consumption_tarive_low"))
+      daily_energy_price_production_normal = float(self.get_state(f"sensor.production_tarive_normal"))
+      daily_energy_price_production_low = float(self.get_state(f"sensor.production_tarive_low"))
+    except:
+      self.log('Necessary sensors not available')
+      return
 
     #initialize
     monthly_energy_price_consumption_normal = 0
@@ -134,7 +137,7 @@ class UpdateEnergySensors(SensorObject):
     monthly_energy_price_production_low = 0
     monthly_energy_price_amount_of_days = 0
 
-    #only if date is not the first, then the prices should be updated, if the date is the first or value is created in the middle of the month, everything should remain 0
+    #only if date is not the first, then the prices should be updated with the values from ha_sensors
     if date.today().day > 1:
       monthly_energy_price_consumption_normal = self.get_sensor_value("sensor.monthly_energy_price_consumption_normal")
       monthly_energy_price_consumption_low = self.get_sensor_value("sensor.monthly_energy_price_consumption_low")
@@ -142,10 +145,10 @@ class UpdateEnergySensors(SensorObject):
       monthly_energy_price_production_low = self.get_sensor_value("sensor.monthly_energy_price_production_low")
       monthly_energy_price_amount_of_days = self.get_sensor_value("sensor.monthly_energy_price_amount_of_days")
 
-    if (daily_energy_price_consumption_normal and daily_energy_price_consumption_low and daily_energy_price_production_normal and daily_energy_price_production_low) > 0:
+    if (daily_energy_price_consumption_normal and daily_energy_price_consumption_low  and daily_energy_price_production_normal  and daily_energy_price_production_low) > 0:
       monthly_energy_price_amount_of_days+=1
-      monthly_energy_price_consumption_normal = round((monthly_energy_price_consumption_normal * (monthly_energy_price_amount_of_days-1) + daily_energy_price_production_normal) / monthly_energy_price_amount_of_days,2)
-      monthly_energy_price_consumption_low = round((monthly_energy_price_consumption_low * (monthly_energy_price_amount_of_days-1) + daily_energy_price_production_low) / monthly_energy_price_amount_of_days,2)
+      monthly_energy_price_consumption_normal = round((monthly_energy_price_consumption_normal * (monthly_energy_price_amount_of_days-1) + daily_energy_price_consumption_normal) / monthly_energy_price_amount_of_days,2)
+      monthly_energy_price_consumption_low = round((monthly_energy_price_consumption_low * (monthly_energy_price_amount_of_days-1) + daily_energy_price_consumption_low) / monthly_energy_price_amount_of_days,2)
       monthly_energy_price_production_normal = round((monthly_energy_price_production_normal * (monthly_energy_price_amount_of_days-1) + daily_energy_price_production_normal) / monthly_energy_price_amount_of_days,2)
       monthly_energy_price_production_low = round((monthly_energy_price_production_low * (monthly_energy_price_amount_of_days-1) + daily_energy_price_production_low) / monthly_energy_price_amount_of_days,2)
 
@@ -265,7 +268,7 @@ class UpdateEnergySensors(SensorObject):
       self.write_sensors_to_namespace("sensor.DSMR_quarterly_peak")
 
   #!!! Check *args and **kwargs!!
-  def on_telegram(self, event_name, data, kwargs):
+  def on_telegram(self, event_name, data, **kwargs):
     '''
     Parse the incoming telegrams and update the corresponding sensors
     '''
