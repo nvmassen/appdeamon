@@ -11,7 +11,8 @@ class EnergyManagementEV(SensorObject):
 
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
-    self.car_charging_modes = {}
+    self.car_charging_modes = []
+    self.car_charging_modes_config = {}
     self.car_charging_switch = ""
     self.input_entities = {}
 
@@ -25,8 +26,15 @@ class EnergyManagementEV(SensorObject):
     #read config
     self.read_config()
 
+
+    #translate config for the different car charging modes
+    self.translate_config()
+
+
     #add the unique entity names involved in this automation
     self.add_entities()
+
+    
 
     #listen to states
     self.listen_states()
@@ -56,62 +64,15 @@ class EnergyManagementEV(SensorObject):
     except AvailabilityError as error:
       self.log(error.value)
      
+    if self.charging_on():
+      self.car_charging_switch_on()
 
-    boiler_charging_needed = sensors_condition_to_check["binary_sensor.boiler_charging_needed"]
-    boiler_boost_mode_on = sensors_condition_to_check["binary_sensor.boiler_charging_boost_mode"]
-    charge_now = sensors_condition_to_check["input_boolean.ev_charge_now"]
-    peak_consumption_above_limit = sensors_condition_to_check["binary_sensor.car_charging_peak_consumption_above_limit"]
-    charging_on = sensors_condition_to_check["input_boolean.stopcontact_wagen_test"]
+    #Temporary, delete later!
+    self.turn_on("automation.car_charging_off_coming_home_after_work")
+    self.turn_on("automation.car_charging_off_day_cloudy")
+    self.turn_on("automation.car_charging_off_day_sunny")
+    self.turn_on("automation.car_charging_off_night")
 
-    #Charging on
-    if (entity_id == "input_boolean.ev_charge_now" and state == "on") or \
-       (entity_id == "binary_sensor.car_charging_peak_consumption_above_limit" and state == "off") or \
-       (entity_id == "binary_sensor.boiler_charging_boost_mode" and state == "off"):
-      #First check if already charging
-      if charging_on:
-        self.log("Car charging switching on is not possible, because car charging is already on")
-        return
-      else:
-        #Second check if peak consumption is above limit
-        if peak_consumption_above_limit:
-          self.log("Car charging switching on is not possible, because peak consumption is above the limit")
-          return
-        else:
-          #Then check if charging now is on
-          if charge_now:
-            #Check if boiler boost mode is on, if true, then EV cannot charge
-            if boiler_boost_mode_on:
-              self.log("Car charging switching on is not possible, because boiler boost mode is on")
-              return
-            else:
-              #Temporary, delete later!
-              self.turn_off("automation.car_charging_off_coming_home_after_work")
-              self.turn_off("automation.car_charging_off_day_cloudy")
-              self.turn_off("automation.car_charging_off_day_sunny")
-              self.turn_off("automation.car_charging_off_night")
-
-              #Switch on car charging
-              self.car_charging_switch_on()
-              #Register hour when charging is switched, automatically switch off after 5 (normal time need to charge car) +2.5 hours (to compensate for max boost mode boiler)
-                
-          #Check if time is after coming home from work
-          
-    #Charging off
-    else:
-      if not charging_on:
-        self.log("Car charging switching off is not possible, because car charging is already off")
-        return
-      else:
-        #Temporary, delete later!
-        self.turn_on("automation.car_charging_off_coming_home_after_work")
-        self.turn_on("automation.car_charging_off_day_cloudy")
-        self.turn_on("automation.car_charging_off_day_sunny")
-        self.turn_on("automation.car_charging_off_night")
-
-        if self.car_charging_switch_off():
-          self.log("Car charging switched off")
-        else:
-          self.log("Error: could not switch car charging off")
 
 
   def car_charging_switch_on(self):
@@ -144,53 +105,13 @@ class EnergyManagementEV(SensorObject):
         break
 
 
-
-
-  def car_charging_switch_off(self):
-    '''
-    Method to switch charging EV off
-    '''
-    
-    charging_on = True
-    ticks = 0
-
-    while charging_on:
-      if ticks <= 5:
-        try:
-          self.turn_off("input_boolean.stopcontact_wagen_test")
-        except:
-          self.log("Error: 'switch.stopcontact_wagen' is not available, will try again")
-          time.sleep(5)
-          ticks += 1
-          continue
-
-        time.sleep(1) #wait for HA to update status of 'switch.stopcontact_wagen'
-        try:
-          if self.get_state("input_boolean.stopcontact_wagen_test") is None:
-            raise Exception("Sensor does not exist")
-        except:
-          self.log("Error: 'switch.stopcontact_wagen' is not available, will try again")
-        else:
-          charging_on = True if self.get_state("input_boolean.stopcontact_wagen_test") == "on" else False
-          if not charging_on:
-            break
-
-        time.sleep(5)
-        ticks += 1
-      else:
-        return False
-    
-    return True
-    
-
-
   def read_config(self):
     '''Method to read config'''
     
     with open('/config/energy_management_EV_config.json','r') as f:
       config = json.load(f)
 
-    self.car_charging_modes = config['car_charging_modes']
+    self.car_charging_modes_config = config['car_charging_modes']
     self.car_charging_switch = config['car_charging_switch']
 
     return
@@ -203,8 +124,12 @@ class EnergyManagementEV(SensorObject):
     Values will be added later  
     '''
     
-    for car_charging_mode in self.car_charging_modes.values():
-      for entity_name in car_charging_mode.keys():
+    for car_charging_mode in self.car_charging_modes:
+
+      for entity_name in car_charging_mode.defined_by.keys():
+          self.input_entities[entity_name] = ""
+
+      for entity_name in car_charging_mode.extra_conditions.keys():
           self.input_entities[entity_name] = ""
 
     return
@@ -252,3 +177,34 @@ class EnergyManagementEV(SensorObject):
           self.input_entities[entity_name] = state
     
     return
+  
+
+
+  def translate_config(self):
+    '''Method to translate the config to individual car charging modes'''
+    for name,car_charging_mode in self.car_charging_modes_config.items():
+      friendly_name = car_charging_mode['friendly_name']
+      defined_by = car_charging_mode['defined_by']
+      try:
+        extra_conditions = car_charging_mode['extra_conditions']
+      except:
+        extra_conditions = {}
+        pass
+
+      self.car_charging_modes.append(self.CarChargingMode(name,friendly_name,defined_by,extra_conditions))
+
+    return
+
+
+  class CarChargingMode():
+    '''class to store the configuration for the different car charging modes'''
+
+    def __init__(self,name,friendly_name,defined_by,extra_conditions):
+      self.name = name
+      self.friendly_name = friendly_name
+      self.defined_by = defined_by
+      self.extra_conditions = extra_conditions
+
+    def __str__(self):
+      output = f"Name: {self.name}\nFriendly name: {self.friendly_name}\nDefined_by: {self.defined_by}\nextra_conditions: {self.extra_conditions}"
+      return output
