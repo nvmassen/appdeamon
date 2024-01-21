@@ -24,11 +24,19 @@ class EnergyManagementEV(SensorObject):
     #self.update_sensors_HA(*self.get_sensors())
 
     #read config
-    self.read_config()
+    try:
+      self.read_config()
+    except Exception as e:
+      self.log(e)
+      return
 
 
     #translate config for the different car charging modes
-    self.translate_config()
+    try:
+      self.parse_config_car_charging_modes()
+    except Exception as e:
+      self.log(e)
+      return
 
 
     #add the unique entity names involved in this automation
@@ -54,7 +62,7 @@ class EnergyManagementEV(SensorObject):
     try:
       entity_id,state = self.read_args(*args)
     except:
-      self.log("No valid arguments given for charging method")
+      self.log("Error: No valid arguments given for charging method")
       return
     
 
@@ -107,12 +115,20 @@ class EnergyManagementEV(SensorObject):
 
   def read_config(self):
     '''Method to read config'''
-    
-    with open('/config/energy_management_EV_config.json','r') as f:
-      config = json.load(f)
+    try:
+      with open(self.args['path_to_config'],'r') as f:
+        try:
+          config = json.load(f)
+        except ValueError:
+          raise ValueError("Error: no valid JSON configuration found")
+    except IOError:
+      raise IOError("Error: no configuration file found")
 
-    self.car_charging_modes_config = config['car_charging_modes']
-    self.car_charging_switch = config['car_charging_switch']
+    try:
+      self.car_charging_modes_config = config['car_charging_modes']
+      self.car_charging_switch = config['car_charging_switch']
+    except:
+      raise ValueError("Error: no valid car charging modes configuration found")
 
     return
   
@@ -180,31 +196,36 @@ class EnergyManagementEV(SensorObject):
   
 
 
-  def translate_config(self):
+  def parse_config_car_charging_modes(self):
     '''Method to translate the config to individual car charging modes'''
-    for name,car_charging_mode in self.car_charging_modes_config.items():
-      friendly_name = car_charging_mode['friendly_name']
-      defined_by = car_charging_mode['defined_by']
-      try:
-        extra_conditions = car_charging_mode['extra_conditions']
-      except:
-        extra_conditions = {}
-        pass
 
-      self.car_charging_modes.append(self.CarChargingMode(name,friendly_name,defined_by,extra_conditions))
+    try:
+      for name,car_charging_mode in self.car_charging_modes_config.items():
+        friendly_name = car_charging_mode['friendly_name']
+        defined_by = car_charging_mode['defined_by']
+        try:
+          extra_conditions = car_charging_mode['extra_conditions']
+        except:
+          extra_conditions = {}
+          pass
+
+        self.car_charging_modes.append(CarChargingMode(name,friendly_name,defined_by,extra_conditions))
+    except:
+      raise ValueError("Error: no valid configuration for car charging mode(s) given")
 
     return
 
 
-  class CarChargingMode():
-    '''class to store the configuration for the different car charging modes'''
 
-    def __init__(self,name,friendly_name,defined_by,extra_conditions):
-      self.name = name
-      self.friendly_name = friendly_name
-      self.defined_by = defined_by
-      self.extra_conditions = extra_conditions
+class CarChargingMode():
+  '''class to store the configuration for the different car charging modes'''
 
-    def __str__(self):
-      output = f"Name: {self.name}\nFriendly name: {self.friendly_name}\nDefined_by: {self.defined_by}\nextra_conditions: {self.extra_conditions}"
-      return output
+  def __init__(self,name,friendly_name,defined_by,extra_conditions):
+    self.name = name
+    self.friendly_name = friendly_name
+    self.defined_by = defined_by
+    self.extra_conditions = extra_conditions
+
+  def __str__(self):
+    output = f"Name: {self.name}\nFriendly name: {self.friendly_name}\nDefined_by: {self.defined_by}\nextra_conditions: {self.extra_conditions}"
+    return output

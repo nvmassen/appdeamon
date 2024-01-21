@@ -6,6 +6,7 @@ ad_helpers:
 start_up:
   module: start_up
   class: StartUp
+  priority: 1
 
 test_niels:
   module: test
@@ -18,10 +19,12 @@ update_energy_sensors:
     - ad_helpers
 
 energy_management_EV:
+  path_to_config: '/config/energy_management_EV_config.json'
   module: energy_management_EV 
   class: EnergyManagementEV
   dependencies:
     - ad_helpers
+  
 
 workstation:
 

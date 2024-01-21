@@ -4,7 +4,9 @@ from helpers.ad_helpers import SensorObject, EnergySensor
 import re
 import appdaemon.plugins.mqtt.mqttapi as mqtt
 import calendar
-monthly_energy_prices = [""]
+import requests
+import bs4
+
 
 
 class UpdateEnergySensors(SensorObject):
@@ -46,12 +48,16 @@ class UpdateEnergySensors(SensorObject):
     #self.run_daily(self.update_self_calculated_quarterly_peak_for_db, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
 
 
+    #Get daily gasprize from internet and update sensor in HA
+    self.run_daily(self.set_daily_gas_price(), "15:45:00")
+    #self.run_daily(self.set_daily_gas_price(), (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
+
     ###Function to manualy input values in appdaemon database
     #self.set_sensors()
 
   def add_sensors(self):
     #Monthly Belpex price and amount of days to calculate monthly Belpex price
-    self.add_sensor(EnergySensor("sensor.belpex_monthly_price", "Belpex Monthly Price", "EUR/kWh"))
+    self.add_sensor(EnergySensor("sensor.belpex_monthly_price", "Belpex Monthly Price", "EUR/MWh"))
     self.add_sensor(EnergySensor("sensor.belpex_monthly_price_amount_of_days", "Belpex Monthly Price Amount Of Days", "days"))
 
     #Monthly energy price and amount of days to calculate monthly energy price
@@ -63,6 +69,9 @@ class UpdateEnergySensors(SensorObject):
 
     #Monthly quarterly peak
     self.add_sensor(EnergySensor("sensor.DSMR_quarterly_peak", "DSMR Quarterly Peak", "kW"))
+
+    #Daily gas price
+    self.add_sensor(EnergySensor("sensor.gas_daily_price", "Gas Daily Price", "EUR/MWh"))
     
     #Holders for monthly quarterly peaks and electricity prices to store them for 12 months
     num = datetime.now().month - 1
@@ -309,6 +318,8 @@ class UpdateEnergySensors(SensorObject):
     for i in range(1,13):
       self.remove_entity(f"sensor.monthly_energy_price_low_{i}", namespace="ha_sensors")
 
+
+
   def update_self_calculated_quarterly_peak_for_db(self, event_name):
     """
     Method to update the sensor 'sensor.electricity_delivery_power_monthly_15m_max' to trigger an update in the HA database 
@@ -318,7 +329,31 @@ class UpdateEnergySensors(SensorObject):
     if (date.today().day % 2 == 0 ):
       self.set_state("sensor.electricity_delivery_power_monthly_15m_max", state=round((value - 0.01), 2), attributes={"unit_of_measurement": "kW","friendly_name": "Electricity Delivery Power Monthly 15m Max"})
     else:
-      self.set_state("sensor.electricity_delivery_power_monthly_15m_max", state=round((value + 0.01),2), attributes={"unit_of_measurement": "kW","friendly_name": "Electricity Delivery Power Monthly 15m Max"})   
+      self.set_state("sensor.electricity_delivery_power_monthly_15m_max", state=round((value + 0.01),2), attributes={"unit_of_measurement": "kW","friendly_name": "Electricity Delivery Power Monthly 15m Max"})
+  
+
+
+  def set_daily_gas_price(self, *args,**kwargs):
+    '''
+    Method to scrape the daily gas price and update the sensor in HA
+    '''
+    
+    res = requests.get("https://my.elexys.be/MarketInformation/IceEndexTtfGas.aspx")
+
+    soup = bs4.BeautifulSoup(res.text,"lxml")
+
+    items = soup.select("#contentPlaceHolder_currentPricesMonthGridview_DXDataRow0")
+
+    result = re.search("(\d\d),(\d\d)",items[0].text)
+
+    value = result.group(1) + '.' + result.group(2)
+
+    if value is not None:
+        self.set_sensor_value("sensor.gas_daily_price", value)
+        self.write_sensors_to_namespace("sensor.gas_daily_price")
+        self.update_sensors_HA("sensor.gas_daily_price")
+
+    return
 
 
 
