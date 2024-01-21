@@ -11,10 +11,11 @@ class EnergyManagementEV(SensorObject):
 
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
-    self.car_charging_modes = []
+    self.car_charging_modes = {"no_charging":CarChargingMode("no_charging","Off")}
     self.car_charging_modes_config = {}
     self.car_charging_switch = ""
     self.input_entities = {}
+    self.current_charging_mode = self.car_charging_modes['no_charging']
 
   def initialize(self):
 
@@ -40,8 +41,11 @@ class EnergyManagementEV(SensorObject):
 
 
     #add the unique entity names involved in this automation
-    self.add_entities()
-
+    try:
+      self.add_entities()
+    except Exception as e:
+      self.log(e)
+      return
     
 
     #listen to states
@@ -58,22 +62,31 @@ class EnergyManagementEV(SensorObject):
     Main method to switch on and off the charging of the EV
     '''
 
-    #check if args are available
+    #check if args for the callback are available
     try:
       entity_id,state = self.read_args(*args)
-    except:
-      self.log("Error: No valid arguments given for charging method")
+    except Exception as e:
+      self.log(e)
       return
     
 
     #read entites from HA with will be used for conditions
     try:
       self.read_states()
-    except AvailabilityError as error:
-      self.log(error.value)
-     
-    if self.charging_on():
-      self.car_charging_switch_on()
+    except AvailabilityError as e:
+      self.log(e.value)
+
+
+    #check if current mode if the same as new mode
+    name_new_charging_mode = self.get_name_new_car_charging_mode()
+    #if name_new_charging_mode == "no charging":
+      
+
+    #if self.get_name_new_car_charging_mode() == self.current_charging_mode.name:
+
+
+    #if self.charging_on():
+      #self.car_charging_switch_on()
 
     #Temporary, delete later!
     self.turn_on("automation.car_charging_off_coming_home_after_work")
@@ -113,6 +126,7 @@ class EnergyManagementEV(SensorObject):
         break
 
 
+
   def read_config(self):
     '''Method to read config'''
     try:
@@ -142,11 +156,15 @@ class EnergyManagementEV(SensorObject):
     
     for car_charging_mode in self.car_charging_modes:
 
-      for entity_name in car_charging_mode.defined_by.keys():
-          self.input_entities[entity_name] = ""
+      if len(car_charging_mode.defined_by) == 0:
+        raise ValueError(f"Error: no 'defined by' values given for '{car_charging_mode.name}'")
+      else:
+        for entity_name in car_charging_mode.defined_by.keys():
+            self.add_input_entity(entity_name)
 
-      for entity_name in car_charging_mode.extra_conditions.keys():
-          self.input_entities[entity_name] = ""
+      if len(car_charging_mode.extra_conditions) > 0:
+        for entity_name in car_charging_mode.extra_conditions.keys():
+            self.add_input_entity(entity_name)
 
     return
 
@@ -163,19 +181,25 @@ class EnergyManagementEV(SensorObject):
 
 
   def read_args(self,*args):
-      print(args)
-      entity_id = args[0]
-      state = args[3]
+
+      try:
+        entity_id = args[0]
+        state = args[3]
+      except:
+        raise ValueError("Error: one or more arguments misssing for 'car_charging_main'")
+      
+      if entity_id == "":
+        raise ValueError("Error: no 'entity_id' given in arguments passed to 'car_charging_main'")
 
       if entity_id in self.input_entities.keys():
         pass
       else:
-        raise
+        raise ValueError(f"Error: sensor '{entity_id}' passed to 'car_charging_main' is not part of the input entities")
 
       if state == "on" or state == "off":
         pass
       else:
-        raise
+        raise ValueError(f"Error: state of '{entity_id}' should be 'on' or 'off' when passed as argument to 'car_charging_main'")
 
       return entity_id,state
   
@@ -209,18 +233,62 @@ class EnergyManagementEV(SensorObject):
           extra_conditions = {}
           pass
 
-        self.car_charging_modes.append(CarChargingMode(name,friendly_name,defined_by,extra_conditions))
-    except:
+        self.car_charging_modes[name] = CarChargingMode(name,friendly_name,defined_by,extra_conditions)
+    except KeyError:
       raise ValueError("Error: no valid configuration for car charging mode(s) given")
+    except AttributeError:
+      raise ValueError("Error: car charging config is empty")
 
     return
+  
 
+
+  def get_name_new_car_charging_mode(self):
+    '''Method to determine the new car charging mode, returns the name of the mode'''
+
+    for name,car_charging_mode in self.car_charging_modes.items():
+      match_found = False
+      print(car_charging_mode)
+      print(self.input_entities)
+      for sensor_name,state in car_charging_mode.defined_by.items():
+        match_found =  state == self.get_input_entity_state(sensor_name)
+      if match_found:
+        result = name
+      else:
+        result = "no_charging"
+      
+      return result
+      
+
+  def is_car_charging_on(self):
+    '''Method to determine if the switch for car charging is on, if the switch is not available, raise error'''
+    result = self.get_state(self.car_charging_switch)
+
+    if result is None:
+      raise AvailabilityError(f"Error: '{self.car_charging_switch}' is not available")
+    
+    return result == 'on'
+
+
+  def add_input_entitie(self,name):
+    self.input_entities[name] = ""
+
+
+  
+  def set_input_entity_state(self,name,state):
+    self.input_entities[name] = state
+
+
+
+  def get_input_entity_state(self,name):
+    return self.input_entities[name] 
+  
 
 
 class CarChargingMode():
   '''class to store the configuration for the different car charging modes'''
 
-  def __init__(self,name,friendly_name,defined_by,extra_conditions):
+  def __init__(self,name="",friendly_name="",defined_by={},extra_conditions={}):
     self.name = name
     self.friendly_name = friendly_name
     self.defined_by = defined_by
