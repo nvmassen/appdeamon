@@ -1,34 +1,11 @@
 import pytest
 from unittest.mock import patch,MagicMock,mock_open
-from helpers.ad_helpers import AvailabilityError
+from helpers.ad_helpers import AvailabilityError,EnergySensor
 from apps.energy_management_EV import CarChargingMode
 import json
-
-'''
-@patch('apps.energy_management_EV.EnergyManagementEV.turn_on')
-@patch('apps.energy_management_EV.EnergyManagementEV.get_state')
-def test_car_charging_switch_on_1(mock_get_state, mock_turn_on, energy_management_EV_fixture):
-    mock_get_state.return_value = 'on'
-    energy_management_EV_fixture.car_charging_switch_on()
-    mock_turn_on.assert_called_once()
+from helpers.energy_management_EV_const import NO_CHARGING
 
 
-@patch('apps.energy_management_EV.EnergyManagementEV.turn_on')
-@patch('apps.energy_management_EV.EnergyManagementEV.get_state')
-def test_car_charging_switch_on_2(mock_get_state, mock_turn_on, energy_management_EV_fixture):
-    mock_get_state.side_effect = [None,None,'on','on']
-    energy_management_EV_fixture.car_charging_switch_on()
-    mock_turn_on.assert_called_once()
-
-
-@patch('apps.energy_management_EV.EnergyManagementEV.turn_on')
-@patch('apps.energy_management_EV.EnergyManagementEV.get_state')
-def test_car_charging_switch_on_3(mock_get_state, mock_turn_on, energy_management_EV_fixture):
-    mock_get_state.side_effect = [None,None,None,'on']
-    energy_management_EV_fixture.car_charging_switch_on()
-    mock_turn_on.assert_called_once()
-
-'''
 
 @pytest.mark.parametrize(
         "arguments,input_entities,error_message", [
@@ -78,7 +55,7 @@ def test_add_entities_1(energy_management_EV_fixture):
 
 
 
-def test_add_entities_1(energy_management_EV_fixture):
+def test_add_entities_2(energy_management_EV_fixture):
     car_charging_mode_1 = CarChargingMode("test")
     
     mock_defined_by = {}
@@ -120,7 +97,9 @@ def test_read_config_2(energy_management_EV_fixture):
                 }
             }
         },
-        "car_charging_switch": "input_boolean.stopcontact_wagen_test"
+        "car_charging_switch": "input_boolean.stopcontact_wagen_test",
+        "turns_allowed": 1,
+        "time_between_turns": 0.1
     }
 
     json_data = json.dumps(data)
@@ -131,8 +110,8 @@ def test_read_config_2(energy_management_EV_fixture):
     
     assert energy_management_EV_fixture.car_charging_modes_config == data["car_charging_modes"]
     assert energy_management_EV_fixture.car_charging_switch == data["car_charging_switch"]
-
-
+    assert energy_management_EV_fixture.turns_allowed == data["turns_allowed"]
+    assert energy_management_EV_fixture.time_between_turns == data["time_between_turns"]
 
 def test_read_config_3(energy_management_EV_fixture):
     energy_management_EV_fixture.args['path_to_config'] = '/config/energy_management_EV_config.json'
@@ -250,7 +229,7 @@ def test_read_states(mock_get_state,energy_management_EV_fixture):
 
 
 
-def test_get_name_new_car_charging_mode_1(energy_management_EV_fixture):
+def test_get_new_car_charging_mode_1(energy_management_EV_fixture):
     car_charging_mode_1 = CarChargingMode("test")
     
     mock_defined_by = {'input_boolean.ev_charge_now':"on"}
@@ -260,25 +239,25 @@ def test_get_name_new_car_charging_mode_1(energy_management_EV_fixture):
     energy_management_EV_fixture.input_entities = {'input_boolean.ev_charge_now':"on"}
    
     with patch.object(car_charging_mode_1,"defined_by",new=mock_defined_by):
-        result = energy_management_EV_fixture.get_name_new_car_charging_mode()
+        result = energy_management_EV_fixture.get_new_car_charging_mode()
 
-    assert result == "test"
+    assert result == car_charging_mode_1
 
 
 
-def test_get_name_new_car_charging_mode_2(energy_management_EV_fixture):
-    car_charging_mode_1 = CarChargingMode("test")
+def test_get_new_car_charging_mode_2(energy_management_EV_fixture):
+    car_charging_mode_1 = CarChargingMode(NO_CHARGING)
     
     mock_defined_by = {'input_boolean.ev_charge_now':"off"}
 
-    energy_management_EV_fixture.car_charging_modes = {"test":car_charging_mode_1}
+    energy_management_EV_fixture.car_charging_modes = {NO_CHARGING:car_charging_mode_1}
 
     energy_management_EV_fixture.input_entities = {'input_boolean.ev_charge_now':"on"}
    
     with patch.object(car_charging_mode_1,"defined_by",new=mock_defined_by):
-        result = energy_management_EV_fixture.get_name_new_car_charging_mode()
+        result = energy_management_EV_fixture.get_new_car_charging_mode()
 
-    assert result == "no_charging"
+    assert result == car_charging_mode_1
 
 
 
@@ -312,3 +291,67 @@ def test_is_charging_on_3(mock_get_state,energy_management_EV_fixture):
     mock_get_state.return_value = 'off'
 
     assert energy_management_EV_fixture.is_car_charging_on() == False
+
+
+
+def test_car_charging_requested_1(energy_management_EV_fixture):
+    car_charging_mode_1 = CarChargingMode('test')
+    
+    mock_extra_conditions = {'input_boolean.ev_charge_now':"on","input_boolean.test":"on"}
+
+    energy_management_EV_fixture.input_entities = {'input_boolean.ev_charge_now':"on","input_boolean.test":"on"}
+
+    with patch.object(car_charging_mode_1,"extra_conditions",new=mock_extra_conditions):
+        result = energy_management_EV_fixture.car_charging_requested(car_charging_mode_1)
+
+    assert result == True
+
+
+
+def test_car_charging_requested_2(energy_management_EV_fixture):
+    car_charging_mode_1 = CarChargingMode('test')
+    
+    mock_extra_conditions = {'input_boolean.ev_charge_now':"on","input_boolean.test":"off"}
+
+    energy_management_EV_fixture.input_entities = {'input_boolean.ev_charge_now':"on","input_boolean.test":"on"}
+
+    with patch.object(car_charging_mode_1,"extra_conditions",new=mock_extra_conditions):
+        result = energy_management_EV_fixture.car_charging_requested(car_charging_mode_1)
+
+    assert result == False
+
+
+
+def test_get_current_car_charging_mode(energy_management_EV_fixture):
+    car_charging_mode_1 = CarChargingMode('test')
+
+    energy_management_EV_fixture.current_charging_mode = car_charging_mode_1
+
+    assert energy_management_EV_fixture.get_current_car_charging_mode() == car_charging_mode_1
+
+
+
+def test_set_car_charging_mode(energy_management_EV_fixture):
+    car_charging_mode_1 = CarChargingMode('test')
+
+    energy_management_EV_fixture.set_car_charging_mode(car_charging_mode_1)
+
+    assert energy_management_EV_fixture.get_current_car_charging_mode() == car_charging_mode_1
+
+
+
+@patch("helpers.ad_helpers.EnergySensor",autospec=True)
+def test_add_sensors(MockEnergySensor,energy_management_EV_fixture):
+    sensor_object_1 = MagicMock()
+    
+    MockEnergySensor.return_value = sensor_object_1
+
+    with patch.object(sensor_object_1,"name",new='test'):
+        energy_management_EV_fixture.add_sensors()
+
+    #MockEnergySensor.assert_called()
+
+    assert list(energy_management_EV_fixture.get_sensors()) == ['test']
+
+
+
