@@ -13,7 +13,10 @@
     },
     "car_charging_switch": "input_boolean.stopcontact_wagen_test",
     "turns_allowed": 1,
-    "time_between_turns": 0.1
+    "time_between_turns": 0.1,
+    "car_charging_mode_sensor_HA": {
+        "sensor.car_charging_mode": "Car Charging Mode"
+    }
 }
 
         

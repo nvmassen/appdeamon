@@ -27,14 +27,17 @@ class UpdateEnergySensors(SensorObject):
     #self.run_daily(self.update_belpex_monthly_price, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
 
 
+
     ###update once a day monthly energy prices
     self.run_daily(self.update_monthly_energy_prices, "16:00:01")
     #self.run_daily(self.update_monthly_energy_prices, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
 
 
+
     ###update monthly quarterly peak values and monthly energy prices
     self.run_daily(self.update_monthly_values_db, "00:00:01")
     #self.run_daily(self.update_monthly_values_db, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
+
 
     
     ###Read quarterly peak from HA (Value taken from P1 meter)
@@ -43,14 +46,18 @@ class UpdateEnergySensors(SensorObject):
     #self.run_daily(self.update_quarterly_peak, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
 
 
+
     ###Hack to minor change calculated quarterly peak in HA to keep it stored in the appdeamon database
     self.run_daily(self.update_self_calculated_quarterly_peak_for_db, "00:00:01")
     #self.run_daily(self.update_self_calculated_quarterly_peak_for_db, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
 
 
+
     #Get daily gasprize from internet and update sensor in HA
-    self.run_daily(self.set_daily_gas_price(), "15:45:00")
-    #self.run_daily(self.set_daily_gas_price(), (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
+    self.run_daily(self.set_daily_gas_price, "15:45:00")
+    #self.run_daily(self.set_daily_gas_price, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
+
+
 
     ###Function to manualy input values in appdaemon database
     #self.set_sensors()
@@ -320,7 +327,7 @@ class UpdateEnergySensors(SensorObject):
 
 
 
-  def update_self_calculated_quarterly_peak_for_db(self, event_name):
+  def update_self_calculated_quarterly_peak_for_db(self, **kwargs):
     """
     Method to update the sensor 'sensor.electricity_delivery_power_monthly_15m_max' to trigger an update in the HA database 
     """
@@ -333,7 +340,7 @@ class UpdateEnergySensors(SensorObject):
   
 
 
-  def set_daily_gas_price(self, *args,**kwargs):
+  def set_daily_gas_price(self, **kwargs):
     '''
     Method to scrape the daily gas price and update the sensor in HA
     '''

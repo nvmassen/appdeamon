@@ -13,31 +13,26 @@ class EnergyManagementEV(SensorObject):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
     self.car_charging_modes = {NO_CHARGING:CarChargingMode(NO_CHARGING,"Off")}
-    self.car_charging_modes_config = {}
     self.car_charging_switch = ""
     self.input_entities = {}
-    self.current_charging_mode = self.car_charging_modes[NO_CHARGING]
     self.turns_allowed = 0
     self.time_between_turns = 0
+    self.car_charging_mode_sensor_HA = ""
+
 
   def initialize(self):
 
-    ###Initialize
-    self.add_sensors()
-    #self.read_sensors_from_namespace(*self.get_sensors())
-    #self.update_sensors_HA(*self.get_sensors())
-
     #read config
     try:
-      self.read_config()
+      config = self.read_config()
     except Exception as e:
       self.log(e)
       return
 
 
-    #translate config for the different car charging modes
+    #parse config
     try:
-      self.parse_config_car_charging_modes()
+      self.parse_config(config)
     except Exception as e:
       self.log(e)
       return
@@ -51,12 +46,12 @@ class EnergyManagementEV(SensorObject):
       return
     
 
+    #initialize
+    self.set_car_charging_mode(self.car_charging_modes[NO_CHARGING])
+    
+
     #listen to states
     self.listen_states()
-
-
-  def add_sensors(self):
-    self.add_sensor(EnergySensor("sensor.car_charging_mode","Car Charging Mode"))
 
 
 
@@ -86,7 +81,7 @@ class EnergyManagementEV(SensorObject):
     new_car_charging_mode = self.get_new_car_charging_mode()
     
 
-    #get request to turn charging in
+    #get request to turn charging on
     car_charging_requested = self.car_charging_requested(new_car_charging_mode)
 
 
@@ -97,30 +92,17 @@ class EnergyManagementEV(SensorObject):
       self.log(e)
       return
     
-    self.log(new_car_charging_mode.name)
-    self.log(self.input_entities)
-    self.log(self.car_charging_modes)
 
-    #check if new charging mode is no 'charging'
-    if new_car_charging_mode == self.car_charging_modes[NO_CHARGING]:
-      if is_car_charging_on: #if charging was on, then toggle off
-        try:
-          self.toggle_car_charging()
-        except Exception as e:
-          self.log(e)
-    elif new_car_charging_mode == self.get_current_car_charging_mode(): #check if current car charging mode needs to be changed
-      if is_car_charging_on != car_charging_requested:
-        try:
-          self.toggle_car_charging()
-        except Exception as e:
-          self.log(e)
-    else:
+    #check if new charging mode is 'no charging'
+    if new_car_charging_mode != self.get_current_car_charging_mode(): #check if current car charging mode needs to be changed
       self.set_car_charging_mode(new_car_charging_mode)
-      if is_car_charging_on != car_charging_requested:
-        try:
-          self.toggle_car_charging()
-        except Exception as e:
-          self.log(e)
+
+
+    if is_car_charging_on != car_charging_requested:
+      try:
+        self.toggle_car_charging()
+      except Exception as e:
+        self.log(e)
 
 
     #Temporary, delete later!
@@ -140,18 +122,13 @@ class EnergyManagementEV(SensorObject):
     turns = 0
     state_car_charging_switch = self.get_state(self.car_charging_switch)
 
-    self.log('test')
 
     while turns < self.turns_allowed:
-      try:
-        if state_car_charging_switch is None:
-          raise AvailabilityError(f"Error: '{self.car_charging_switch}' is not available, will try again")
-      except AvailabilityError as e:
-        self.log(e)
+
+      if state_car_charging_switch is None:
         time.sleep(self.time_between_turns)
         turns += 1
-        continue
-
+        
       if state_car_charging_switch == 'off':
         self.turn_on(self.car_charging_switch)
       else:
@@ -160,20 +137,17 @@ class EnergyManagementEV(SensorObject):
       time.sleep(1) #wait for HA to update status of 'switch.stopcontact_wagen'
 
       #check if switch toggled
-      try:
-        if self.get_state("input_boolean.stopcontact_wagen_test") == state_car_charging_switch:
-          raise Exception(f"Error: '{self.car_charging_switch}' is not toggled, will try again")
-      except Exception as e:
-        self.log("Error: 'switch.stopcontact_wagen' is not on, will try again")
+      if self.get_state(self.car_charging_switch) == state_car_charging_switch:
         time.sleep(self.time_between_turns)
         turns += 1
         continue
       else:
-        break
+        return
+
+    raise AvailabilityError(f"Error: '{self.car_charging_switch}' is not available, could not toggle switch")  
 
 
-
-  def read_config(self):
+  def read_config(self): 
     '''Method to read config'''
     try:
       with open(self.args['path_to_config'],'r') as f:
@@ -184,15 +158,7 @@ class EnergyManagementEV(SensorObject):
     except IOError:
       raise IOError("Error: no configuration file found")
 
-    try:
-      self.car_charging_modes_config = config['car_charging_modes']
-      self.car_charging_switch = config['car_charging_switch']
-      self.turns_allowed = config['turns_allowed']
-      self.time_between_turns = config['time_between_turns']
-    except:
-      raise ValueError("Error: no valid car charging modes configuration found")
-
-    return
+    return config
   
 
 
@@ -221,12 +187,8 @@ class EnergyManagementEV(SensorObject):
   def listen_states(self):
     '''Method to listen to the states of the different sensors'''
 
-    #for entity in self.input_entities:
-      #self.listen_state(self.car_charging_main,entity)
-
-    self.listen_state(self.car_charging_main,"input_boolean.ev_charge_now")
-    self.listen_state(self.car_charging_main,"binary_sensor.car_charging_peak_consumption_above_limit")
-    self.listen_state(self.car_charging_main,"binary_sensor.boiler_charging_boost_mode")
+    for entity in self.input_entities:
+      self.listen_state(self.car_charging_main,entity)
           
     return
   
@@ -272,11 +234,36 @@ class EnergyManagementEV(SensorObject):
   
 
 
-  def parse_config_car_charging_modes(self):
-    '''Method to translate the config to individual car charging modes'''
+  def parse_config(self, config):
+    '''Method to translate the config'''
 
     try:
-      for name,car_charging_mode in self.car_charging_modes_config.items():
+      car_charging_modes_config = config['car_charging_modes']
+    except:
+      raise ValueError("Error: no valid car charging mode(s) configuration found")
+    
+    try:
+      self.car_charging_switch = config['car_charging_switch']
+      self.turns_allowed = config['turns_allowed']
+      self.time_between_turns = config['time_between_turns']
+    except:
+      raise ValueError("Error: no valid car charging switch configuration found") 
+    
+
+    try:
+      car_charging_mode_sensor_HA_config = config['car_charging_mode_sensor_HA']
+      for name,friendly_name in car_charging_mode_sensor_HA_config.items():
+        self.car_charging_mode_sensor_HA = name
+        self.add_sensor(EnergySensor(name,friendly_name))
+    except:
+      raise ValueError("Error: no valid car charging mode sensor for HA configuration found") 
+    
+    
+    if car_charging_modes_config == {}:
+      raise ValueError("Error: car charging modes config is empty")
+    
+    try:
+      for name,car_charging_mode in car_charging_modes_config.items():
         friendly_name = car_charging_mode['friendly_name']
         defined_by = car_charging_mode['defined_by']
         try:
@@ -288,8 +275,7 @@ class EnergyManagementEV(SensorObject):
         self.car_charging_modes[name] = CarChargingMode(name,friendly_name,defined_by,extra_conditions)
     except KeyError:
       raise ValueError("Error: no valid configuration for car charging mode(s) given")
-    except AttributeError:
-      raise ValueError("Error: car charging config is empty")
+
 
     return
   
@@ -347,6 +333,9 @@ class EnergyManagementEV(SensorObject):
     '''Method to set a new car charging mode'''
 
     self.current_charging_mode = new_car_charging_mode
+
+    self.set_sensor_value(self.car_charging_mode_sensor_HA,self.current_charging_mode.friendly_name)
+    self.update_sensors_HA(self.car_charging_mode_sensor_HA)
 
 
 

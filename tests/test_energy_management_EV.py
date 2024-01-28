@@ -106,16 +106,34 @@ def test_read_config_2(energy_management_EV_fixture):
     mock_open_file = mock_open(read_data=json_data)
 
     with patch("builtins.open",mock_open_file):
-        energy_management_EV_fixture.read_config()
-    
-    assert energy_management_EV_fixture.car_charging_modes_config == data["car_charging_modes"]
-    assert energy_management_EV_fixture.car_charging_switch == data["car_charging_switch"]
-    assert energy_management_EV_fixture.turns_allowed == data["turns_allowed"]
-    assert energy_management_EV_fixture.time_between_turns == data["time_between_turns"]
+        assert energy_management_EV_fixture.read_config() == data
+
+
 
 def test_read_config_3(energy_management_EV_fixture):
     energy_management_EV_fixture.args['path_to_config'] = '/config/energy_management_EV_config.json'
-    data = {
+
+    mock_open_file = mock_open(read_data="test")
+
+    with patch("builtins.open",mock_open_file):
+        with pytest.raises(ValueError) as e:
+            energy_management_EV_fixture.read_config()
+        assert str(e.value) == "Error: no valid JSON configuration found"
+    
+
+
+def test_parse_config_1(energy_management_EV_fixture):
+    config = ""
+
+    with pytest.raises(ValueError) as e:
+        energy_management_EV_fixture.parse_config(config)
+    
+    assert str(e.value) == "Error: no valid car charging mode(s) configuration found"
+
+
+
+def test_parse_config_2(energy_management_EV_fixture):
+    config = {
         "car_charging_modes": {
             "car_charging_now": {
                 "friendly_name": "Nu opladen",
@@ -130,91 +148,116 @@ def test_read_config_3(energy_management_EV_fixture):
         }
     }
 
-    json_data = json.dumps(data)
-    mock_open_file = mock_open(read_data=json_data)
-
-    with patch("builtins.open",mock_open_file):
-        with pytest.raises(ValueError) as e:
-            energy_management_EV_fixture.read_config()
-        assert str(e.value) == "Error: no valid car charging modes configuration found"
-    
-
-
-def test_read_config_4(energy_management_EV_fixture):
-    energy_management_EV_fixture.args['path_to_config'] = '/config/energy_management_EV_config.json'
-
-    mock_open_file = mock_open(read_data="test")
-
-    with patch("builtins.open",mock_open_file):
-        with pytest.raises(ValueError) as e:
-            energy_management_EV_fixture.read_config()
-        assert str(e.value) == "Error: no valid JSON configuration found"
-    
-
-
-def test_parse_config_car_charging_modes_1(energy_management_EV_fixture):
-    energy_management_EV_fixture.car_charging_modes_config = ""
-
     with pytest.raises(ValueError) as e:
-        energy_management_EV_fixture.parse_config_car_charging_modes()
+        energy_management_EV_fixture.parse_config(config)
     
-    assert str(e.value) == "Error: car charging config is empty"
+    assert str(e.value) == "Error: no valid car charging switch configuration found"
 
 
 
-def test_parse_config_car_charging_modes_2(energy_management_EV_fixture):
-    energy_management_EV_fixture.car_charging_modes_config = {
-        "car_charging_now": {
-            "friendly_name": "Nu opladen",
-        }
+def test_parse_config_3(energy_management_EV_fixture):
+    config = {
+        "car_charging_modes": {
+        },
+        "car_charging_switch": "input_boolean.stopcontact_wagen_test",
+        "turns_allowed": 1,
+        "time_between_turns": 0.1,
+        "car_charging_mode_sensor_HA": {
+            "sensor.car_charging_mode": "Car Charging Mode"
+        },
     }
 
     with pytest.raises(ValueError) as e:
-        energy_management_EV_fixture.parse_config_car_charging_modes()
+        energy_management_EV_fixture.parse_config(config)
+    
+    assert str(e.value) == "Error: car charging modes config is empty"
+
+
+
+def test_parse_config_4(energy_management_EV_fixture):
+    config = {
+        "car_charging_modes": {
+            "car_charging_now": {
+                "friendly_name": "Nu opladen"
+                }
+        },
+        "car_charging_switch": "input_boolean.stopcontact_wagen_test",
+        "turns_allowed": 1,
+        "time_between_turns": 0.1,
+        "car_charging_mode_sensor_HA": {
+            "sensor.car_charging_mode": "Car Charging Mode"
+        },
+    }
+ 
+    with pytest.raises(ValueError) as e:
+        energy_management_EV_fixture.parse_config(config)
     
     assert str(e.value) == "Error: no valid configuration for car charging mode(s) given"
 
 
 
-@patch("apps.energy_management_EV.CarChargingMode",autospec=True)
-def test_parse_config_car_charging_modes_3(mockCarChargingMode,energy_management_EV_fixture):
-    energy_management_EV_fixture.car_charging_modes_config = {
-        "car_charging_now": {
-            "friendly_name": "Nu opladen",
-            "defined_by": {
-                "input_boolean.ev_charge_now": "on"
-            },
-            "extra_conditions": {
-                "binary_sensor.car_charging_peak_consumption_above_limit": "off",
-                "binary_sensor.boiler_charging_boost_mode": "off"
+def test_parse_config_5(energy_management_EV_fixture):
+    config = {
+        "car_charging_modes": {
+            "car_charging_now": {
+                "friendly_name": "Nu opladen",
+                "defined_by": {
+                    "input_boolean.ev_charge_now": "on"
+                },
+                "extra_conditions": {
+                    "binary_sensor.car_charging_peak_consumption_above_limit": "off",
+                    "binary_sensor.boiler_charging_boost_mode": "off"
+                }
             }
-        }
+        },
+        "car_charging_switch": "input_boolean.stopcontact_wagen_test",
+        "turns_allowed": 1,
+        "time_between_turns": 0.1
     }
 
-    energy_management_EV_fixture.parse_config_car_charging_modes()
-
-    mockCarChargingMode.assert_called_with('car_charging_now', 'Nu opladen', {'input_boolean.ev_charge_now': 'on'}, {'binary_sensor.car_charging_peak_consumption_above_limit': 'off', 'binary_sensor.boiler_charging_boost_mode': 'off'})
-
-    assert isinstance(energy_management_EV_fixture.car_charging_modes["car_charging_now"],CarChargingMode)
-
+    with pytest.raises(ValueError) as e:
+        energy_management_EV_fixture.parse_config(config)
+    
+    assert str(e.value) == "Error: no valid car charging mode sensor for HA configuration found"
 
 
+
+@patch("apps.energy_management_EV.EnergySensor",autospec=True)
 @patch("apps.energy_management_EV.CarChargingMode",autospec=True)
-def test_parse_config_car_charging_modes_4(mockCarChargingMode,energy_management_EV_fixture):
-    energy_management_EV_fixture.car_charging_modes_config = {
-        "car_charging_now": {
-            "friendly_name": "Nu opladen",
-            "defined_by": {
-                "input_boolean.ev_charge_now": "on"
+def test_parse_config_6(mockCarChargingMode,mockEnergySensor,energy_management_EV_fixture):
+    config = {
+        "car_charging_modes": {
+            "car_charging_now": {
+                "friendly_name": "Nu opladen",
+                "defined_by": {
+                    "input_boolean.ev_charge_now": "on"
+                }
             }
+        },
+        "car_charging_switch": "input_boolean.stopcontact_wagen_test",
+        "turns_allowed": 1,
+        "time_between_turns": 0.1,
+        "car_charging_mode_sensor_HA": {
+            "sensor.car_charging_mode": "Car Charging Mode"
         }
     }
-    mock = MagicMock()
-    mockCarChargingMode.return_value = mock
-    energy_management_EV_fixture.parse_config_car_charging_modes()
+    mock_1 = MagicMock()
+    mockCarChargingMode.return_value = mock_1
+
+    mock_2 = MagicMock()
+    mockEnergySensor.return_value = mock_2
+
+    with patch.object(mock_2,"name",new="sensor.car_charging_mode"):
+     energy_management_EV_fixture.parse_config(config)
+
 
     mockCarChargingMode.assert_called_with('car_charging_now', 'Nu opladen', {'input_boolean.ev_charge_now': 'on'},{})
-    assert energy_management_EV_fixture.car_charging_modes["car_charging_now"] == mock
+    assert energy_management_EV_fixture.car_charging_modes["car_charging_now"] == mock_1
+
+
+    mockEnergySensor.assert_called_with("sensor.car_charging_mode","Car Charging Mode")
+    assert energy_management_EV_fixture.sensors["sensor.car_charging_mode"] == mock_2
+    assert energy_management_EV_fixture.car_charging_mode_sensor_HA == "sensor.car_charging_mode"
 
 
 
@@ -339,15 +382,70 @@ def test_set_car_charging_mode(energy_management_EV_fixture):
     assert energy_management_EV_fixture.get_current_car_charging_mode() == car_charging_mode_1
 
 
-@patch("apps.energy_management_EV.EnergySensor")
-def test_add_sensors(MockEnergySensor,energy_management_EV_fixture):
-    mock_energy_sensor = MockEnergySensor()
-    with patch.object(mock_energy_sensor,'name',new='test'):
-        energy_management_EV_fixture.add_sensors()
+@patch('apps.energy_management_EV.EnergyManagementEV.get_state')
+def test_toggle_car_charging_1(mock_get_state,energy_management_EV_fixture):
 
-    MockEnergySensor.assert_called_with("sensor.car_charging_mode","Car Charging Mode")
+    energy_management_EV_fixture.turns_allowed = 1
+    energy_management_EV_fixture.time_between_turns = 0.1
 
-    assert list(energy_management_EV_fixture.get_sensors()) == ['test']
+    mock_get_state.return_value = None
+
+    energy_management_EV_fixture.car_charging_switch = 'switch.test'
+
+    with pytest.raises(Exception) as e:
+        energy_management_EV_fixture.toggle_car_charging()
+        mock_get_state.assert_called()
+    
+    assert str(e.value) == '"Error: \'switch.test\' is not available, could not toggle switch"'
 
 
+@patch('apps.energy_management_EV.EnergyManagementEV.turn_off')
+@patch('apps.energy_management_EV.EnergyManagementEV.get_state')
+def test_toggle_car_charging_2(mock_get_state,mock_turn_off,energy_management_EV_fixture):
 
+    energy_management_EV_fixture.turns_allowed = 1
+    energy_management_EV_fixture.time_between_turns = 0.1
+
+    mock_get_state.return_value = 'on'
+
+    energy_management_EV_fixture.car_charging_switch = 'switch.test'
+
+    with pytest.raises(Exception) as e:
+        energy_management_EV_fixture.toggle_car_charging()
+        mock_get_state.assert_called_with('switch.test')
+        mock_turn_off.assert_called_with('switch.test')
+    
+    assert str(e.value) == '"Error: \'switch.test\' is not available, could not toggle switch"'
+
+
+@patch('apps.energy_management_EV.EnergyManagementEV.turn_off')
+@patch('apps.energy_management_EV.EnergyManagementEV.get_state')
+def test_toggle_car_charging_3(mock_get_state,mock_turn_off,energy_management_EV_fixture):
+
+    energy_management_EV_fixture.turns_allowed = 1
+    energy_management_EV_fixture.time_between_turns = 0.1
+
+    mock_get_state.side_effect = ['on','off']
+
+    energy_management_EV_fixture.car_charging_switch = 'switch.test'
+
+    energy_management_EV_fixture.toggle_car_charging()
+    mock_get_state.assert_called_with('switch.test')
+    mock_turn_off.assert_called_with('switch.test')
+    
+
+@patch('apps.energy_management_EV.EnergyManagementEV.turn_on')
+@patch('apps.energy_management_EV.EnergyManagementEV.get_state')
+def test_toggle_car_charging_4(mock_get_state,mock_turn_on,energy_management_EV_fixture):
+
+    energy_management_EV_fixture.turns_allowed = 1
+    energy_management_EV_fixture.time_between_turns = 0.1
+
+    mock_get_state.side_effect = ['off','on']
+
+    energy_management_EV_fixture.car_charging_switch = 'switch.test'
+
+    energy_management_EV_fixture.toggle_car_charging()
+    mock_get_state.assert_called_with('switch.test')
+    mock_turn_on.assert_called_with('switch.test')
+    
