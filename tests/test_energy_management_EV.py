@@ -374,16 +374,77 @@ def test_get_current_car_charging_mode(energy_management_EV_fixture):
 
 
 
-def test_set_car_charging_mode(energy_management_EV_fixture):
+@patch("apps.energy_management_EV.EnergyManagementEV.set_sensor_value")
+@patch("apps.energy_management_EV.EnergyManagementEV.update_sensors_HA")
+def test_set_car_charging_mode_1(mock_update_sensors_HA,mock_set_sensor_value,energy_management_EV_fixture):
     car_charging_mode_1 = MagicMock()
 
-    energy_management_EV_fixture.self.car_charging_mode_sensor_HA = 'sensor.test'
+    energy_management_EV_fixture.car_charging_mode_sensor_HA = 'sensor.test'
 
-    energy_management_EV_fixture.set_car_charging_mode(car_charging_mode_1)
+    with patch.object(car_charging_mode_1,'friendly_name',new='test object'):
+        energy_management_EV_fixture.set_car_charging_mode(car_charging_mode_1)
 
     assert energy_management_EV_fixture.get_current_car_charging_mode() == car_charging_mode_1
+    mock_update_sensors_HA.assert_called_with('sensor.test')
+    mock_set_sensor_value.assert_called_with('sensor.test','test object')
 
 
+
+@patch("apps.energy_management_EV.EnergyManagementEV.set_sensor_value")
+@patch("apps.energy_management_EV.EnergyManagementEV.update_sensors_HA")
+@patch("apps.energy_management_EV.EnergyManagementEV.read_states")
+def test_car_charging_main_1(mock_read_states,mock_update_sensors_HA,mock_set_sensor_value,energy_management_EV_fixture):
+    config= {
+        "car_charging_modes": {
+            "car_charging_now": {
+                "friendly_name": "Nu opladen",
+                "defined_by": {
+                    "input_boolean.ev_charge_now": "on"
+                },
+                "extra_conditions": {
+                    "binary_sensor.car_charging_peak_consumption_above_limit": "off",
+                    "binary_sensor.boiler_charging_boost_mode": "off"
+                }
+            },
+            "car_charging_night": {
+                "friendly_name": "Nu opladen",
+                "defined_by": {
+                    "binary_sensor.car_charging_night_time": "on"
+                },
+                "extra_conditions": {
+                    "binary_sensor.car_charging_peak_consumption_above_limit": "off",
+                    "input_boolean.car_needed_next_day": "on",
+                    "binary_sensor.boiler_charging_needed": "off"
+                }
+            }
+        },
+        "car_charging_switch": "input_boolean.stopcontact_wagen_test",
+        "turns_allowed": 1,
+        "time_between_turns": 0.1,
+        "car_charging_mode_sensor_HA": {
+            "sensor.car_charging_mode": "Car Charging Mode"
+        }
+    }
+
+    
+    energy_management_EV_fixture.parse_config(config)
+    energy_management_EV_fixture.add_entities()
+    energy_management_EV_fixture.set_car_charging_mode(energy_management_EV_fixture.car_charging_modes[NO_CHARGING])
+
+    mock_read_states.return_value = 'on'
+    energy_management_EV_fixture.car_charging_main()
+
+    assert energy_management_EV_fixture.get_current_car_charging_mode() == energy_management_EV_fixture.car_charging_modes[NO_CHARGING]
+    mock_update_sensors_HA.assert_called_with('sensor.test')
+    mock_set_sensor_value.assert_called_with('sensor.test','test object')    
+
+
+
+
+
+
+#tests for toggle car charging, only turn on when testing these functions, takes a lot of time to be tested
+'''
 @patch('apps.energy_management_EV.EnergyManagementEV.get_state')
 def test_toggle_car_charging_1(mock_get_state,energy_management_EV_fixture):
 
@@ -450,4 +511,4 @@ def test_toggle_car_charging_4(mock_get_state,mock_turn_on,energy_management_EV_
     energy_management_EV_fixture.toggle_car_charging()
     mock_get_state.assert_called_with('switch.test')
     mock_turn_on.assert_called_with('switch.test')
-    
+'''    

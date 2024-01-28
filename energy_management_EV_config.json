@@ -9,6 +9,17 @@
                 "binary_sensor.car_charging_peak_consumption_above_limit": "off",
                 "binary_sensor.boiler_charging_boost_mode": "off"
             }
+        },
+        "car_charging_night": {
+            "friendly_name": "Nu opladen",
+            "defined_by": {
+                "binary_sensor.car_charging_night_time": "on"
+            },
+            "extra_conditions": {
+                "binary_sensor.car_charging_peak_consumption_above_limit": "off",
+                "input_boolean.car_needed_next_day": "on",
+                "binary_sensor.boiler_charging_needed": "off"
+            }
         }
     },
     "car_charging_switch": "input_boolean.stopcontact_wagen_test",
