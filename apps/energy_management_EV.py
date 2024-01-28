@@ -56,7 +56,7 @@ class EnergyManagementEV(SensorObject):
 
 
   def add_sensors(self):
-    self.add_sensor(EnergySensor("sensor.car_charging_mode", "Car Charging Mode", ""))
+    self.add_sensor(EnergySensor("sensor.car_charging_mode","Car Charging Mode"))
 
 
 
@@ -65,12 +65,14 @@ class EnergyManagementEV(SensorObject):
     Main method to switch on and off the charging of the EV
     '''
 
+    '''
     #check if args for the callback are available
     try:
       entity_id,state = self.read_args(*args)
     except Exception as e:
       self.log(e)
       return
+    '''
     
 
     #read entites from HA with will be used for conditions
@@ -95,18 +97,30 @@ class EnergyManagementEV(SensorObject):
       self.log(e)
       return
     
+    self.log(new_car_charging_mode.name)
+    self.log(self.input_entities)
+    self.log(self.car_charging_modes)
 
     #check if new charging mode is no 'charging'
-    if new_car_charging_mode == NO_CHARGING:
+    if new_car_charging_mode == self.car_charging_modes[NO_CHARGING]:
       if is_car_charging_on: #if charging was on, then toggle off
-        self.toggle_car_charging()
-    elif new_car_charging_mode == self.get_current_charging_mode: #check if current car charging mode needs to be changed
+        try:
+          self.toggle_car_charging()
+        except Exception as e:
+          self.log(e)
+    elif new_car_charging_mode == self.get_current_car_charging_mode(): #check if current car charging mode needs to be changed
       if is_car_charging_on != car_charging_requested:
-        self.toggle_car_charging()
+        try:
+          self.toggle_car_charging()
+        except Exception as e:
+          self.log(e)
     else:
       self.set_car_charging_mode(new_car_charging_mode)
       if is_car_charging_on != car_charging_requested:
-        self.toggle_car_charging()
+        try:
+          self.toggle_car_charging()
+        except Exception as e:
+          self.log(e)
 
 
     #Temporary, delete later!
@@ -125,6 +139,8 @@ class EnergyManagementEV(SensorObject):
     '''
     turns = 0
     state_car_charging_switch = self.get_state(self.car_charging_switch)
+
+    self.log('test')
 
     while turns < self.turns_allowed:
       try:
@@ -186,9 +202,9 @@ class EnergyManagementEV(SensorObject):
     Values will be added later  
     '''
     
-    for car_charging_mode in self.car_charging_modes:
+    for car_charging_mode in self.car_charging_modes.values():
 
-      if len(car_charging_mode.defined_by) == 0:
+      if len(car_charging_mode.defined_by) == 0 and car_charging_mode.name != NO_CHARGING:
         raise ValueError(f"Error: no 'defined by' values given for '{car_charging_mode.name}'")
       else:
         for entity_name in car_charging_mode.defined_by.keys():
@@ -285,6 +301,8 @@ class EnergyManagementEV(SensorObject):
     for name,car_charging_mode in self.car_charging_modes.items():
       match_found = False
 
+      print(car_charging_mode.name)
+
       for sensor_name,state in car_charging_mode.defined_by.items():
         match_found = (state == self.get_input_entity_state(sensor_name))
       if match_found:
@@ -292,7 +310,7 @@ class EnergyManagementEV(SensorObject):
       else:
         result = self.car_charging_modes[NO_CHARGING]
       
-      return result
+    return result
     
 
 

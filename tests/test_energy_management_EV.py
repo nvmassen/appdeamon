@@ -45,7 +45,7 @@ def test_add_entities_1(energy_management_EV_fixture):
     mock_defined_by = {"input_boolean.ev_charge_now": "on"}
     mock_extra_conditions = {"binary_sensor.car_charging_peak_consumption_above_limit": "off"}
 
-    energy_management_EV_fixture.car_charging_modes = [car_charging_mode_1]
+    energy_management_EV_fixture.car_charging_modes = {'car_charging_mode_1':car_charging_mode_1}
    
     with patch.object(car_charging_mode_1,"defined_by",new=mock_defined_by):
         with patch.object(car_charging_mode_1,"extra_conditions",new=mock_extra_conditions):
@@ -61,7 +61,7 @@ def test_add_entities_2(energy_management_EV_fixture):
     mock_defined_by = {}
     mock_extra_conditions = {"binary_sensor.car_charging_peak_consumption_above_limit": "off"}
 
-    energy_management_EV_fixture.car_charging_modes = [car_charging_mode_1]
+    energy_management_EV_fixture.car_charging_modes = {'car_charging_mode_1':car_charging_mode_1}
    
     with patch.object(car_charging_mode_1,"defined_by",new=mock_defined_by):
         with patch.object(car_charging_mode_1,"extra_conditions",new=mock_extra_conditions):
@@ -323,7 +323,7 @@ def test_car_charging_requested_2(energy_management_EV_fixture):
 
 
 def test_get_current_car_charging_mode(energy_management_EV_fixture):
-    car_charging_mode_1 = CarChargingMode('test')
+    car_charging_mode_1 = MagicMock()
 
     energy_management_EV_fixture.current_charging_mode = car_charging_mode_1
 
@@ -332,24 +332,20 @@ def test_get_current_car_charging_mode(energy_management_EV_fixture):
 
 
 def test_set_car_charging_mode(energy_management_EV_fixture):
-    car_charging_mode_1 = CarChargingMode('test')
+    car_charging_mode_1 = MagicMock()
 
     energy_management_EV_fixture.set_car_charging_mode(car_charging_mode_1)
 
     assert energy_management_EV_fixture.get_current_car_charging_mode() == car_charging_mode_1
 
 
-
-@patch("helpers.ad_helpers.EnergySensor",autospec=True)
+@patch("apps.energy_management_EV.EnergySensor")
 def test_add_sensors(MockEnergySensor,energy_management_EV_fixture):
-    sensor_object_1 = MagicMock()
-    
-    MockEnergySensor.return_value = sensor_object_1
-
-    with patch.object(sensor_object_1,"name",new='test'):
+    mock_energy_sensor = MockEnergySensor()
+    with patch.object(mock_energy_sensor,'name',new='test'):
         energy_management_EV_fixture.add_sensors()
 
-    #MockEnergySensor.assert_called()
+    MockEnergySensor.assert_called_with("sensor.car_charging_mode","Car Charging Mode")
 
     assert list(energy_management_EV_fixture.get_sensors()) == ['test']
 
