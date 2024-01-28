@@ -377,6 +377,8 @@ def test_get_current_car_charging_mode(energy_management_EV_fixture):
 def test_set_car_charging_mode(energy_management_EV_fixture):
     car_charging_mode_1 = MagicMock()
 
+    energy_management_EV_fixture.self.car_charging_mode_sensor_HA = 'sensor.test'
+
     energy_management_EV_fixture.set_car_charging_mode(car_charging_mode_1)
 
     assert energy_management_EV_fixture.get_current_car_charging_mode() == car_charging_mode_1
