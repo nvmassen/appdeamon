@@ -75,7 +75,7 @@ class EnergySensor():
     
     
 # A python program to create user-defined exceptions
-# class AvailabilityError is derived from super class Exception
+# class LookUpError is derived from super class Exception
 class AvailabilityError(Exception):
  
     # Constructor or Initializer

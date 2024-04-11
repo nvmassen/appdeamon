@@ -7,20 +7,17 @@ import calendar
 import time
 import json
 from helpers.energy_management_EV_const import NO_CHARGING
-from helpers.energy_management_EV_helpers import CarChargingMode
 
 class EnergyManagementEV(SensorObject):
   
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
-    self.car_charging_modes = {NO_CHARGING:CarChargingMode(NO_CHARGING,"No Car Charging")}
+    self.car_charging_modes = {NO_CHARGING:CarChargingMode(NO_CHARGING,"Off")}
     self.car_charging_switch = ""
     self.input_entities = {}
     self.turns_allowed = 0
     self.time_between_turns = 0
     self.car_charging_mode_sensor_HA = ""
-    self.car_charging_cooldown_start_sensor_HA = ""
-    self.cooldown_start = None
 
 
   def initialize(self):
@@ -42,7 +39,6 @@ class EnergyManagementEV(SensorObject):
       return
 
     self.log('Config file succesfully parsed')
-
 
     #add the unique entity names involved in this automation
     try:
@@ -76,7 +72,9 @@ class EnergyManagementEV(SensorObject):
       entity_id,state = self.read_args(*args)
       self.log(f"Car charging app is triggered by: '{entity_id}' with state '{state}'")
     except Exception as e:
-      self.log(e)    
+      self.log(e)
+      self.log("No arguments provided for 'car charging main'")
+      
    
 
     #read entites from HA wich will be used for conditions
@@ -86,7 +84,6 @@ class EnergyManagementEV(SensorObject):
       self.log(e)
       return
 
-    self.log(self.input_entities)
 
     #get new charging mode
     new_car_charging_mode = self.get_new_car_charging_mode()
@@ -114,8 +111,8 @@ class EnergyManagementEV(SensorObject):
       self.log("Car charging is 'off'")
 
 
-    #check if car charging is requested
-    car_charging_requested = self.car_charging_requested(new_car_charging_mode, is_car_charging_on)
+    #get request to turn charging on
+    car_charging_requested = self.car_charging_requested(new_car_charging_mode)
 
     if car_charging_requested:
       self.log("Car charging is requested")
@@ -123,13 +120,33 @@ class EnergyManagementEV(SensorObject):
       self.log("Car charging is not requested")
 
 
-    if is_car_charging_on != car_charging_requested:
-      try:
-        self.toggle_car_charging()
-      except Exception as e:
-        self.log(e)
+    #check if new charging mode is 'no charging' and charging is on -> turn charging off
+    if new_car_charging_mode == self.car_charging_modes[NO_CHARGING]:
+      if is_car_charging_on:
+        try:
+          self.toggle_car_charging()
+        except Exception as e:
+          self.log(e)
+      else:
+        self.log("No car charging toggle required")
     else:
-      self.log("No car charging toggle required")
+      if is_car_charging_on != car_charging_requested:
+        try:
+          self.toggle_car_charging()
+        except Exception as e:
+          self.log(e)
+      else:
+        self.log("No car charging toggle required")
+
+
+    #Temporary, delete later!
+    '''
+    self.turn_on("automation.car_charging_off_afternonn")
+    self.turn_on("automation.car_charging_off_day_cloudy")
+    self.turn_on("automation.car_charging_off_day_sunny")
+    self.turn_on("automation.car_charging_off_night")
+    '''
+
 
 
   def toggle_car_charging(self):
@@ -137,14 +154,12 @@ class EnergyManagementEV(SensorObject):
     Method to switch charging EV on
     '''
     turns = 0
-
     state_car_charging_switch_old = self.get_state(self.car_charging_switch)
-   
+
 
     while turns < self.turns_allowed:
-      self.log(state_car_charging_switch_old)
 
-      if state_car_charging_switch_old is None:
+      if state_car_charging_switch_old  is None:
         time.sleep(self.time_between_turns)
         turns += 1
         
@@ -196,12 +211,8 @@ class EnergyManagementEV(SensorObject):
         for entity_name in car_charging_mode.defined_by.keys():
             self.add_input_entity(entity_name)
 
-      if len(car_charging_mode.conditions_on) > 0:
-        for entity_name in car_charging_mode.conditions_on.keys():
-            self.add_input_entity(entity_name)
-
-      if len(car_charging_mode.conditions_off) > 0:
-        for entity_name in car_charging_mode.conditions_off.keys():
+      if len(car_charging_mode.extra_conditions) > 0:
+        for entity_name in car_charging_mode.extra_conditions.keys():
             self.add_input_entity(entity_name)
 
     return
@@ -266,52 +277,37 @@ class EnergyManagementEV(SensorObject):
     except:
       raise ValueError("Error: no valid car charging mode(s) configuration found")
     
-
     try:
       self.car_charging_switch = config['car_charging_switch']
       self.turns_allowed = config['turns_allowed']
       self.time_between_turns = config['time_between_turns']
     except:
-      raise ValueError("Error: no valid car charging switch configuration found")
+      raise ValueError("Error: no valid car charging switch configuration found") 
     
 
     try:
-      HA_sensor_car_charging_mode_config = config['HA_sensor_car_charging_mode']
-      for name,friendly_name in HA_sensor_car_charging_mode_config.items():
+      car_charging_mode_sensor_HA_config = config['car_charging_mode_sensor_HA']
+      for name,friendly_name in car_charging_mode_sensor_HA_config.items():
         self.car_charging_mode_sensor_HA = name
         self.add_sensor(EnergySensor(name,friendly_name))
     except:
       raise ValueError("Error: no valid car charging mode sensor for HA configuration found") 
     
-
-    try:
-      HA_sensor_car_charging_cooldown_start_config = config['HA_sensor_car_charging_cooldown_start']
-      for name,friendly_name in HA_sensor_car_charging_cooldown_start_config.items():
-        self.car_charging_cooldown_start_sensor_HA = name
-        self.add_sensor(EnergySensor(name,friendly_name))
-    except:
-      raise ValueError("Error: no valid car charging cooldown start sensor for HA configuration found") 
     
-
     if car_charging_modes_config == {}:
       raise ValueError("Error: car charging modes config is empty")
     
-
     try:
       for name,car_charging_mode in car_charging_modes_config.items():
         friendly_name = car_charging_mode['friendly_name']
         defined_by = car_charging_mode['defined_by']
         try:
-          conditions_on = car_charging_mode['conditions_on']
+          extra_conditions = car_charging_mode['extra_conditions']
         except:
-          conditions_on = {}
-        try:
-          conditions_off = car_charging_mode['conditions_off']
-        except:
-          conditions_off = {}
+          extra_conditions = {}
+          pass
 
-        self.car_charging_modes[name] = CarChargingMode(name,friendly_name,defined_by,conditions_on,conditions_off)
-
+        self.car_charging_modes[name] = CarChargingMode(name,friendly_name,defined_by,extra_conditions)
     except KeyError:
       raise ValueError("Error: no valid configuration for car charging mode(s) given")
 
@@ -344,47 +340,15 @@ class EnergyManagementEV(SensorObject):
       
 
 
-  def car_charging_requested(self,new_car_charging_mode: CarChargingMode, is_car_charging_on: bool) -> bool : 
+  def car_charging_requested(self,new_car_charging_mode):
     '''Method to determine of the car charging needs to be switched on based on the conditions'''
     
-    #check if new car charging mode is NO_CHARGING, if this is the case, return false
-    if new_car_charging_mode == self.car_charging_modes[NO_CHARGING]:
-      return False
+    checks = set()
 
-    #if car charging mode is not NO_CHARGING, check conditions on and conditions off
-    check_conditions_on = True
-
-    if len(new_car_charging_mode.conditions_on) > 0:
-      list_check_conditions_on = set()
-
-      for sensor_name,state in new_car_charging_mode.conditions_on.items():
-        list_check_conditions_on.add(state == self.get_input_entity_state(sensor_name))
-      
-      if len(list_check_conditions_on) == 1:
-        check_conditions_on = list(list_check_conditions_on)[0]
-      else:
-        check_conditions_on = False
-      
-
-    check_conditions_off = False
-
-    if len(new_car_charging_mode.conditions_off) > 0:
-
-      list_check_conditions_off = set()
-
-      for sensor_name,state in new_car_charging_mode.conditions_off.items():
-        list_check_conditions_off.add(state == self.get_input_entity_state(sensor_name))
-
-      check_conditions_off = True in list_check_conditions_off
+    for sensor_name,state in new_car_charging_mode.extra_conditions.items():
+      checks.add(state == self.get_input_entity_state(sensor_name))
     
-    if check_conditions_on:
-      car_charging_requested = True
-    elif is_car_charging_on and not check_conditions_off:
-      car_charging_requested = True
-    else:
-      car_charging_requested = False
-
-    return car_charging_requested
+    return len(checks) == 1 and True in checks
 
 
 
@@ -422,3 +386,17 @@ class EnergyManagementEV(SensorObject):
   def get_input_entity_state(self,name):
     return self.input_entities[name] 
   
+
+
+class CarChargingMode():
+  '''class to store the configuration for the different car charging modes'''
+
+  def __init__(self,name="",friendly_name="",defined_by={},extra_conditions={}):
+    self.name = name
+    self.friendly_name = friendly_name
+    self.defined_by = defined_by
+    self.extra_conditions = extra_conditions
+
+  def __str__(self):
+    output = f"Name: {self.name}\nFriendly name: {self.friendly_name}\nDefined_by: {self.defined_by}\nextra_conditions: {self.extra_conditions}"
+    return output

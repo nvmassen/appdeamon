@@ -2,7 +2,6 @@ from statistics import mean
 from datetime import datetime, timedelta, date
 from helpers.ad_helpers import SensorObject, EnergySensor
 import re
-import appdaemon.plugins.mqtt.mqttapi as mqtt
 import calendar
 import requests
 import bs4

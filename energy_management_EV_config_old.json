@@ -1,0 +1,72 @@
+{
+    "car_charging_modes": {
+        "car_charging_now": {
+            "friendly_name": "Nu Opladen",
+            "defined_by": {
+                "input_boolean.ev_charge_now": "on"
+            },
+            "extra_conditions": {
+                "binary_sensor.car_charging_peak_consumption_above_limit": "off",
+                "binary_sensor.boiler_charging_boost_mode": "off"
+            }
+        },
+        "car_charging_night": {
+            "friendly_name": "Opladen Nacht",
+            "defined_by": {
+                "binary_sensor.car_charging_night_time": "on",
+                "input_boolean.ev_charge_now": "off"
+            },
+            "extra_conditions": {
+                "binary_sensor.car_charging_peak_consumption_above_limit": "off",
+                "input_boolean.car_needed_next_day": "on",
+                "binary_sensor.boiler_charging_needed": "off"
+            }
+        },
+        "car_charging_day_cloudy": {
+            "friendly_name": "Dag Bewolkt",
+            "defined_by": {
+                "binary_sensor.car_charging_solar_prediction_sunny": "off",
+                "input_boolean.ev_charge_now": "off",
+                "binary_sensor.car_charging_day": "on"
+            },
+            "extra_conditions": {
+                "binary_sensor.car_charging_power_production_on_cloudy": "on",
+                "binary_sensor.car_charging_peak_consumption_above_limit": "off",
+                "binary_sensor.boiler_charging_needed": "off"
+            }
+        },
+        "car_charging_day_sunny": {
+            "friendly_name": "Dag Zonnig",
+            "defined_by": {
+                "binary_sensor.car_charging_solar_prediction_sunny": "on",
+                "input_boolean.ev_charge_now": "off",
+                "binary_sensor.car_charging_day": "on"
+            },
+            "extra_conditions": {
+                "binary_sensor.car_charging_power_production_on_sunny": "on",
+                "binary_sensor.car_charging_peak_consumption_above_limit": "off",
+                "binary_sensor.boiler_charging_needed": "off"
+            }
+        },
+        "car_charging_day_cloudy_afternoon": {
+            "friendly_name": "Namiddag Bewolkt",
+            "defined_by": {
+                "input_boolean.ev_charge_now": "off",
+                "binary_sensor.car_charging_afternoon": "on"
+            },
+            "extra_conditions": {
+                "binary_sensor.car_charging_power_production_on_cloudy": "on",
+                "binary_sensor.car_charging_peak_consumption_above_limit": "off",
+                "input_boolean.car_needed_next_day": "on"
+            }
+        }
+    },
+    "car_charging_switch": "switch.stopcontact_wagen",
+    "turns_allowed": 1,
+    "time_between_turns": 0.1,
+    "car_charging_mode_sensor_HA": {
+        "sensor.car_charging_mode": "Car Charging Mode"
+    }
+}
+
+        

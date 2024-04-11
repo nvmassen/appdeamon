@@ -8,7 +8,7 @@ start_up:
   class: StartUp
   priority: 1
 
-test_niels:
+test_app:
   module: test
   class: light_on
 
@@ -18,15 +18,17 @@ update_energy_sensors:
   dependencies:
     - ad_helpers
 
+#energy_management_EV_test:
+#  path_to_config: '/config/energy_management_EV_config_test.json'
+#  module: energy_management_EV 
+#  class: EnergyManagementEV
+#  dependencies:
+#    - ad_helpers
+
 energy_management_EV:
   path_to_config: '/config/energy_management_EV_config.json'
-  module: energy_management_EV 
+  module: energy_management_EV
   class: EnergyManagementEV
   dependencies:
     - ad_helpers
-  
-
-workstation:
-
-  switch_entity: 'input_boolean.stopcontact_wagen_test'
-  sensor_entity: 'sensor.power_production_w'
+    - energy_management_EV_helpers
