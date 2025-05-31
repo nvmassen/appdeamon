@@ -57,7 +57,6 @@ class UpdateEnergySensors(SensorObject):
     #self.run_daily(self.set_daily_gas_price, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
 
 
-
     ###Function to manualy input values in appdaemon database
     #self.set_sensors()
 
@@ -268,7 +267,7 @@ class UpdateEnergySensors(SensorObject):
 
     #FOR USE WHEN RECEIVING MONTHLY PEAK VIA HA
     '''
-    Update sensor in APPDEAMON
+    Update sensor in APPDAEMON
     '''
 
     value = self.get_state("sensor.p1_meter_peak_demand_current_month")
@@ -276,11 +275,12 @@ class UpdateEnergySensors(SensorObject):
     self.log(f"The peak value is: {value} W")
 
     if value is not None:
-      value = int(value)/1000 #conversion from W to kW
+      value = float(value)/1000 #conversion from W to kW
 
     if value != self.get_sensor_value("sensor.DSMR_quarterly_peak"):
       self.set_sensor_value("sensor.DSMR_quarterly_peak", value)
       self.write_sensors_to_namespace("sensor.DSMR_quarterly_peak")
+      self.update_sensors_HA("sensor.DSMR_quarterly_peak")
 
   #!!! Check *args and **kwargs!!
   def on_telegram(self, event_name, data, **kwargs):
@@ -321,8 +321,9 @@ class UpdateEnergySensors(SensorObject):
       self.write_sensors_to_namespace(name)
       self.update_sensors_HA(name)
     '''
-    for i in range(1,13):
-      self.remove_entity(f"sensor.monthly_energy_price_low_{i}", namespace="ha_sensors")
+
+    self.set_sensor_value("sensor.quarterly_peak_month_12",4.200)
+    self.write_sensors_to_namespace("sensor.quarterly_peak_month_12")
 
 
 
@@ -350,7 +351,7 @@ class UpdateEnergySensors(SensorObject):
 
     items = soup.select("#contentPlaceHolder_currentPricesMonthGridview_DXDataRow0")
 
-    result = re.search("(\d\d),(\d\d)",items[0].text)
+    result = re.search(r"(\d\d),(\d\d)",items[0].text)
 
     value = result.group(1) + '.' + result.group(2)
 

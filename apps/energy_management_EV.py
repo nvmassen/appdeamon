@@ -24,6 +24,24 @@ class EnergyManagementEV(SensorObject):
 
 
   def initialize(self):
+    #Initialize
+    self.initalize_car_charging()
+    
+
+    #listen to states to trigger car charging main function
+    self.listen_states()
+
+
+    #Reset car not needed boolean
+    self.run_daily(self.reset_car_needed_next_day, "6:00:00")
+    #self.run_daily(self.reset_car_needed_next_day, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
+
+    self.log('Car Charging Initialised.')
+
+  def initalize_car_charging(self):
+    '''
+    Method to initialize car charging app
+    '''
 
     #read config
     try:
@@ -32,7 +50,7 @@ class EnergyManagementEV(SensorObject):
       self.log(e)
       return
 
-    self.log('Config file succesfully read')
+    self.log('Config file succesfully read', level='DEBUG')
 
     #parse config
     try:
@@ -41,7 +59,7 @@ class EnergyManagementEV(SensorObject):
       self.log(e)
       return
 
-    self.log('Config file succesfully parsed')
+    self.log('Config file succesfully parsed', level='DEBUG')
 
 
     #add the unique entity names involved in this automation
@@ -51,17 +69,14 @@ class EnergyManagementEV(SensorObject):
       self.log(e)
       return
     
-    self.log('Input entities added')
+    self.log('Input entities added', level='DEBUG')
 
     #initialize
     self.set_car_charging_mode(self.car_charging_modes[NO_CHARGING])
     
-    self.log(f"Car charging mode set to '{self.get_current_car_charging_mode().name}'")
+    self.log(f"Car charging mode set to '{self.get_current_car_charging_mode().name}'", level='DEBUG')
 
     self.car_charging_main()
-
-    #listen to states
-    self.listen_states()
 
 
 
@@ -70,14 +85,12 @@ class EnergyManagementEV(SensorObject):
     Main method to switch on and off the charging of the EV
     '''
 
-
     #check if args for the callback are available
     try:
       entity_id,state = self.read_args(*args)
-      self.log(f"Car charging app is triggered by: '{entity_id}' with state '{state}'")
+      self.log(f"Car charging app is triggered by: '{entity_id}' with state '{state}'", level='DEBUG')
     except Exception as e:
-      self.log(e)    
-   
+      self.log(e, level='DEBUG')
 
     #read entites from HA wich will be used for conditions
     try:
@@ -86,19 +99,17 @@ class EnergyManagementEV(SensorObject):
       self.log(e)
       return
 
-    self.log(self.input_entities)
-
     #get new charging mode
     new_car_charging_mode = self.get_new_car_charging_mode()
 
-    self.log(f"The current car charging mode is: '{self.get_current_car_charging_mode().name}'")
-    self.log(f"The requested car charging mode is: '{new_car_charging_mode.name}'")
+    self.log(f"The current car charging mode is: '{self.get_current_car_charging_mode().name}'", level='DEBUG')
+    self.log(f"The requested car charging mode is: '{new_car_charging_mode.name}'", level='DEBUG')
     
 
     #check if current car charging mode needs to be changed
     if new_car_charging_mode != self.get_current_car_charging_mode(): 
         self.set_car_charging_mode(new_car_charging_mode)
-        self.log(f"Car charging mode changed to: '{new_car_charging_mode.name}'")
+        self.log(f"Car charging mode changed to: '{new_car_charging_mode.name}'", level='DEBUG')
 
 
     #get state of the car charging switch
@@ -109,18 +120,18 @@ class EnergyManagementEV(SensorObject):
       return
     
     if is_car_charging_on:
-      self.log("Car charging is 'on'")
+      self.log("Car charging is 'on'", level='DEBUG')
     else:
-      self.log("Car charging is 'off'")
+      self.log("Car charging is 'off'", level='DEBUG')
 
 
     #check if car charging is requested
     car_charging_requested = self.car_charging_requested(new_car_charging_mode, is_car_charging_on)
 
     if car_charging_requested:
-      self.log("Car charging is requested")
+      self.log("Car charging is requested", level='DEBUG')
     else:
-      self.log("Car charging is not requested")
+      self.log("Car charging is not requested", level='DEBUG')
 
 
     if is_car_charging_on != car_charging_requested:
@@ -129,7 +140,7 @@ class EnergyManagementEV(SensorObject):
       except Exception as e:
         self.log(e)
     else:
-      self.log("No car charging toggle required")
+      self.log("No car charging toggle required", level='DEBUG')
 
 
   def toggle_car_charging(self):
@@ -139,10 +150,9 @@ class EnergyManagementEV(SensorObject):
     turns = 0
 
     state_car_charging_switch_old = self.get_state(self.car_charging_switch)
-   
 
     while turns < self.turns_allowed:
-      self.log(state_car_charging_switch_old)
+      self.log(state_car_charging_switch_old, level='DEBUG')
 
       if state_car_charging_switch_old is None:
         time.sleep(self.time_between_turns)
@@ -161,7 +171,7 @@ class EnergyManagementEV(SensorObject):
         turns += 1
         continue
       else:
-        self.log(f"Car charging successfully toggled")
+        self.log(f"Car charging successfully toggled", level='DEBUG')
         return
 
     raise AvailabilityError(f"Error: '{self.car_charging_switch}' is not available, could not toggle switch")  
@@ -421,4 +431,9 @@ class EnergyManagementEV(SensorObject):
 
   def get_input_entity_state(self,name):
     return self.input_entities[name] 
+  
+
+
+  def reset_car_needed_next_day(self, *args, **kwargs):
+    self.turn_on("input_boolean.car_needed_next_day")
   

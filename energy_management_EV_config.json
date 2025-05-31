@@ -107,7 +107,7 @@
             }
         }
     },
-    "car_charging_switch": "input_boolean.stopcontact_wagen_test",
+    "car_charging_switch": "switch.stopcontact_wagen",
     "turns_allowed": 1,
     "time_between_turns": 0.1,
     "HA_sensor_car_charging_mode": {

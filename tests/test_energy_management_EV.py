@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch,MagicMock,mock_open
 from helpers.ad_helpers import AvailabilityError,EnergySensor
-from apps.energy_management_EV_test import CarChargingMode
+from helpers.energy_management_EV_helpers import CarChargingMode
 import json
 from helpers.energy_management_EV_const import NO_CHARGING
 
