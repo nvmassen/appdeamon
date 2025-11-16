@@ -5,8 +5,8 @@ import re
 import calendar
 import requests
 import bs4
-
-
+from collections.abc import Mapping, MutableMapping
+import sys
 
 class UpdateEnergySensors(SensorObject):
 
@@ -44,21 +44,16 @@ class UpdateEnergySensors(SensorObject):
     self.run_daily(self.update_quarterly_peak, "20:00:00")
     #self.run_daily(self.update_quarterly_peak, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
 
-
-
     ###Hack to minor change calculated quarterly peak in HA to keep it stored in the appdeamon database
     self.run_daily(self.update_self_calculated_quarterly_peak_for_db, "00:00:01")
     #self.run_daily(self.update_self_calculated_quarterly_peak_for_db, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
-
-
 
     #Get daily gasprize from internet and update sensor in HA
     self.run_daily(self.set_daily_gas_price, "15:45:00")
     #self.run_daily(self.set_daily_gas_price, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
 
-
     ###Function to manualy input values in appdaemon database
-    #self.set_sensors()
+    #self.set_sensors("sensor.monthly_energy_price_production_low_12", 0.03)
 
   def add_sensors(self):
     #Monthly Belpex price and amount of days to calculate monthly Belpex price
@@ -106,19 +101,14 @@ class UpdateEnergySensors(SensorObject):
 
     lst = []
     
-    if date.today().day == 1:    
+    if date.today().day == 1:
       belpex_monthly_price = 0
       belpex_monthly_price_amount_of_days = 0
     else:
       belpex_monthly_price = self.get_sensor_value("sensor.belpex_monthly_price")
       belpex_monthly_price_amount_of_days = self.get_sensor_value("sensor.belpex_monthly_price_amount_of_days")
-
-    for i in range(7):
-      value = float(self.get_state(f"sensor.belpex{i+1}"))
-      if (value > 0):
-        lst.append(value)
-    
-    belpex_daily_price = round(mean(lst),2)
+  
+    belpex_daily_price = float(self.get_state("sensor.belpex_daily_price"))
 
     if belpex_daily_price > 0:
       belpex_monthly_price_amount_of_days+=1
@@ -312,7 +302,7 @@ class UpdateEnergySensors(SensorObject):
       self.restart_app("update_energy_sensors") #restart app to stop updating
 
 
-  def set_sensors(self):
+  def set_sensors(self, entity_id, value):
     '''
     for i in range(1,13):
       name = f"sensor.monthly_energy_price_consumption_normal_{i}"
@@ -322,8 +312,8 @@ class UpdateEnergySensors(SensorObject):
       self.update_sensors_HA(name)
     '''
 
-    self.set_sensor_value("sensor.quarterly_peak_month_12",4.200)
-    self.write_sensors_to_namespace("sensor.quarterly_peak_month_12")
+    self.set_sensor_value(entity_id,value)
+    self.write_sensors_to_namespace(entity_id)
 
 
 

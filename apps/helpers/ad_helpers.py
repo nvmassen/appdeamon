@@ -1,4 +1,5 @@
 import appdaemon.plugins.hass.hassapi as hass
+from collections.abc import Mapping
 
 class SensorObject(hass.Hass):
 
@@ -10,7 +11,14 @@ class SensorObject(hass.Hass):
     def read_sensors_from_namespace(self, *args):
         for key in args:
             sensor = self.sensors[key]
-            value = self.get_state(sensor.name, namespace="ha_sensors")
+            # Original code:
+            #value = self.get_state(sensor.name, namespace="ha_sensors")
+
+            # Work around due to bug in APP Daemon:
+            entity = self.get_entity(sensor.name, "ha_sensors")
+            value = entity.state
+            # End work around
+
             if value != None:
                 sensor.value = value
 
