@@ -96,263 +96,335 @@ class UpdateEnergySensors(SensorObject):
 
   def update_belpex_monthly_price(self, **kwargs):
     '''
-    Update belpex monthly price with 
+    Update belpex monthly price with error handling
     '''
-
-    lst = []
+    try:
+      lst = []
+      
+      if date.today().day == 1:
+        belpex_monthly_price = 0
+        belpex_monthly_price_amount_of_days = 0
+      else:
+        belpex_monthly_price = self.get_sensor_value("sensor.belpex_monthly_price")
+        belpex_monthly_price_amount_of_days = self.get_sensor_value("sensor.belpex_monthly_price_amount_of_days")
     
-    if date.today().day == 1:
-      belpex_monthly_price = 0
-      belpex_monthly_price_amount_of_days = 0
-    else:
-      belpex_monthly_price = self.get_sensor_value("sensor.belpex_monthly_price")
-      belpex_monthly_price_amount_of_days = self.get_sensor_value("sensor.belpex_monthly_price_amount_of_days")
-  
-    belpex_daily_price = float(self.get_state("sensor.belpex_daily_price"))
+      # Validate state retrieval
+      daily_price_state = self.get_state("sensor.belpex_daily_price")
+      if daily_price_state is None or daily_price_state == "unavailable" or daily_price_state == "unknown":
+        self.log("Belpex daily price sensor unavailable, skipping update", level="WARNING")
+        return
+      
+      try:
+        belpex_daily_price = float(daily_price_state)
+      except (ValueError, TypeError) as e:
+        self.log(f"Failed to convert belpex daily price to float: {e}", level="ERROR")
+        return
 
-    if belpex_daily_price > 0:
-      belpex_monthly_price_amount_of_days+=1
-      belpex_monthly_price = round((belpex_monthly_price * (belpex_monthly_price_amount_of_days-1) + belpex_daily_price) / belpex_monthly_price_amount_of_days,2)
+      if belpex_daily_price > 0:
+        belpex_monthly_price_amount_of_days += 1
+        belpex_monthly_price = round((belpex_monthly_price * (belpex_monthly_price_amount_of_days-1) + belpex_daily_price) / belpex_monthly_price_amount_of_days, 2)
 
-    self.set_sensor_value("sensor.belpex_monthly_price", belpex_monthly_price)
-    self.set_sensor_value("sensor.belpex_monthly_price_amount_of_days", belpex_monthly_price_amount_of_days)
+      self.set_sensor_value("sensor.belpex_monthly_price", belpex_monthly_price)
+      self.set_sensor_value("sensor.belpex_monthly_price_amount_of_days", belpex_monthly_price_amount_of_days)
 
-    self.write_sensors_to_namespace("sensor.belpex_monthly_price","sensor.belpex_monthly_price_amount_of_days")
-    self.update_sensors_HA("sensor.belpex_monthly_price","sensor.belpex_monthly_price_amount_of_days")
+      self.write_sensors_to_namespace("sensor.belpex_monthly_price","sensor.belpex_monthly_price_amount_of_days")
+      self.update_sensors_HA("sensor.belpex_monthly_price","sensor.belpex_monthly_price_amount_of_days")
+      
+    except Exception as e:
+      self.log(f"Error updating belpex monthly price: {e}", level="ERROR")
 
 
   def update_monthly_energy_prices(self, **kwargs):
     '''
-    Update monthly energy prices once a day
+    Update monthly energy prices once a day with improved error handling
     '''
     try:
-      daily_energy_price_consumption_normal = float(self.get_state(f"sensor.consumption_tarive_normal"))
-      daily_energy_price_consumption_low = float(self.get_state(f"sensor.consumption_tarive_low"))
-      daily_energy_price_production_normal = float(self.get_state(f"sensor.production_tarive_normal"))
-      daily_energy_price_production_low = float(self.get_state(f"sensor.production_tarive_low"))
-    except:
-      self.log('Necessary sensors not available')
+      # Get sensor states with validation
+      sensors_to_check = [
+        ("sensor.consumption_tarive_normal", "daily_energy_price_consumption_normal"),
+        ("sensor.consumption_tarive_low", "daily_energy_price_consumption_low"),
+        ("sensor.production_tarive_normal", "daily_energy_price_production_normal"),
+        ("sensor.production_tarive_low", "daily_energy_price_production_low")
+      ]
+      
+      sensor_values = {}
+      for sensor_name, var_name in sensors_to_check:
+        state = self.get_state(sensor_name)
+        if state is None or state == "unavailable" or state == "unknown":
+          self.log(f'Sensor {sensor_name} not available, skipping monthly energy price update', level="WARNING")
+          return
+        
+        try:
+          sensor_values[var_name] = float(state)
+        except (ValueError, TypeError) as e:
+          self.log(f'Failed to convert {sensor_name} to float: {e}', level="ERROR")
+          return
+      
+      daily_energy_price_consumption_normal = sensor_values["daily_energy_price_consumption_normal"]
+      daily_energy_price_consumption_low = sensor_values["daily_energy_price_consumption_low"]
+      daily_energy_price_production_normal = sensor_values["daily_energy_price_production_normal"]
+      daily_energy_price_production_low = sensor_values["daily_energy_price_production_low"]
+      
+    except Exception as e:
+      self.log(f'Error retrieving energy price sensors: {e}', level="ERROR")
       return
 
-    #initialize
-    monthly_energy_price_consumption_normal = 0
-    monthly_energy_price_consumption_low = 0
-    monthly_energy_price_production_normal = 0
-    monthly_energy_price_production_low = 0
-    monthly_energy_price_amount_of_days = 0
+    try:
+      #initialize
+      monthly_energy_price_consumption_normal = 0
+      monthly_energy_price_consumption_low = 0
+      monthly_energy_price_production_normal = 0
+      monthly_energy_price_production_low = 0
+      monthly_energy_price_amount_of_days = 0
 
-    #only if date is not the first, then the prices should be updated with the values from ha_sensors
-    if date.today().day > 1:
-      monthly_energy_price_consumption_normal = self.get_sensor_value("sensor.monthly_energy_price_consumption_normal")
-      monthly_energy_price_consumption_low = self.get_sensor_value("sensor.monthly_energy_price_consumption_low")
-      monthly_energy_price_production_normal = self.get_sensor_value("sensor.monthly_energy_price_production_normal")
-      monthly_energy_price_production_low = self.get_sensor_value("sensor.monthly_energy_price_production_low")
-      monthly_energy_price_amount_of_days = self.get_sensor_value("sensor.monthly_energy_price_amount_of_days")
+      #only if date is not the first, then the prices should be updated with the values from ha_sensors
+      if date.today().day > 1:
+        monthly_energy_price_consumption_normal = self.get_sensor_value("sensor.monthly_energy_price_consumption_normal")
+        monthly_energy_price_consumption_low = self.get_sensor_value("sensor.monthly_energy_price_consumption_low")
+        monthly_energy_price_production_normal = self.get_sensor_value("sensor.monthly_energy_price_production_normal")
+        monthly_energy_price_production_low = self.get_sensor_value("sensor.monthly_energy_price_production_low")
+        monthly_energy_price_amount_of_days = self.get_sensor_value("sensor.monthly_energy_price_amount_of_days")
 
-    if (daily_energy_price_consumption_normal and daily_energy_price_consumption_low  and daily_energy_price_production_normal  and daily_energy_price_production_low) > 0:
-      monthly_energy_price_amount_of_days+=1
-      monthly_energy_price_consumption_normal = round((monthly_energy_price_consumption_normal * (monthly_energy_price_amount_of_days-1) + daily_energy_price_consumption_normal) / monthly_energy_price_amount_of_days,2)
-      monthly_energy_price_consumption_low = round((monthly_energy_price_consumption_low * (monthly_energy_price_amount_of_days-1) + daily_energy_price_consumption_low) / monthly_energy_price_amount_of_days,2)
-      monthly_energy_price_production_normal = round((monthly_energy_price_production_normal * (monthly_energy_price_amount_of_days-1) + daily_energy_price_production_normal) / monthly_energy_price_amount_of_days,2)
-      monthly_energy_price_production_low = round((monthly_energy_price_production_low * (monthly_energy_price_amount_of_days-1) + daily_energy_price_production_low) / monthly_energy_price_amount_of_days,2)
+      if (daily_energy_price_consumption_normal and daily_energy_price_consumption_low  and daily_energy_price_production_normal  and daily_energy_price_production_low) > 0:
+        monthly_energy_price_amount_of_days += 1
+        monthly_energy_price_consumption_normal = round((monthly_energy_price_consumption_normal * (monthly_energy_price_amount_of_days-1) + daily_energy_price_consumption_normal) / monthly_energy_price_amount_of_days, 2)
+        monthly_energy_price_consumption_low = round((monthly_energy_price_consumption_low * (monthly_energy_price_amount_of_days-1) + daily_energy_price_consumption_low) / monthly_energy_price_amount_of_days, 2)
+        monthly_energy_price_production_normal = round((monthly_energy_price_production_normal * (monthly_energy_price_amount_of_days-1) + daily_energy_price_production_normal) / monthly_energy_price_amount_of_days, 2)
+        monthly_energy_price_production_low = round((monthly_energy_price_production_low * (monthly_energy_price_amount_of_days-1) + daily_energy_price_production_low) / monthly_energy_price_amount_of_days, 2)
 
-    self.set_sensor_value("sensor.monthly_energy_price_consumption_normal", monthly_energy_price_consumption_normal)
-    self.set_sensor_value("sensor.monthly_energy_price_consumption_low", monthly_energy_price_consumption_low)
-    self.set_sensor_value("sensor.monthly_energy_price_production_normal", monthly_energy_price_production_normal)
-    self.set_sensor_value("sensor.monthly_energy_price_production_low", monthly_energy_price_production_low)
-    self.set_sensor_value("sensor.monthly_energy_price_amount_of_days", monthly_energy_price_amount_of_days)
+      self.set_sensor_value("sensor.monthly_energy_price_consumption_normal", monthly_energy_price_consumption_normal)
+      self.set_sensor_value("sensor.monthly_energy_price_consumption_low", monthly_energy_price_consumption_low)
+      self.set_sensor_value("sensor.monthly_energy_price_production_normal", monthly_energy_price_production_normal)
+      self.set_sensor_value("sensor.monthly_energy_price_production_low", monthly_energy_price_production_low)
+      self.set_sensor_value("sensor.monthly_energy_price_amount_of_days", monthly_energy_price_amount_of_days)
 
-    self.write_sensors_to_namespace("sensor.monthly_energy_price_consumption_normal","sensor.monthly_energy_price_consumption_low","sensor.monthly_energy_price_production_normal","sensor.monthly_energy_price_production_low","sensor.monthly_energy_price_amount_of_days")
-    self.update_sensors_HA("sensor.monthly_energy_price_consumption_normal","sensor.monthly_energy_price_consumption_low","sensor.monthly_energy_price_production_normal","sensor.monthly_energy_price_production_low","sensor.monthly_energy_price_amount_of_days")
+      self.write_sensors_to_namespace("sensor.monthly_energy_price_consumption_normal","sensor.monthly_energy_price_consumption_low","sensor.monthly_energy_price_production_normal","sensor.monthly_energy_price_production_low","sensor.monthly_energy_price_amount_of_days")
+      self.update_sensors_HA("sensor.monthly_energy_price_consumption_normal","sensor.monthly_energy_price_consumption_low","sensor.monthly_energy_price_production_normal","sensor.monthly_energy_price_production_low","sensor.monthly_energy_price_amount_of_days")
+      
+    except Exception as e:
+      self.log(f'Error calculating monthly energy prices: {e}', level="ERROR")
 
 
   def update_monthly_values_db(self, **kwargs):
-    if (date.today().day == 1):
+    try:
+      if (date.today().day == 1):
 
-      #Get current month and year to update friendly name sensors
-      month = datetime.now().month
-      year = datetime.now().year
-      if (month) == 1:
-        friendly_name_month_12 = f"{calendar.month_name[12]} {year-1}"
-        friendly_name_current_month = f"{calendar.month_name[1]} {year}"
-      else:
-        friendly_name_month_12 = f"{calendar.month_name[month-1]} {year}"
-        friendly_name_current_month = f"{calendar.month_name[month]} {year}"
+        #Get current month and year to update friendly name sensors
+        month = datetime.now().month
+        year = datetime.now().year
+        if (month) == 1:
+          friendly_name_month_12 = f"{calendar.month_name[12]} {year-1}"
+          friendly_name_current_month = f"{calendar.month_name[1]} {year}"
+        else:
+          friendly_name_month_12 = f"{calendar.month_name[month-1]} {year}"
+          friendly_name_current_month = f"{calendar.month_name[month]} {year}"
 
-      #Quarterly peakes
-      for i in range(1,12):
-        value = self.get_sensor_value(f"sensor.quarterly_peak_month_{i+1}")
-        self.set_sensor_value(f"sensor.quarterly_peak_month_{i}", value)
+        #Quarterly peakes
+        for i in range(1,12):
+          value = self.get_sensor_value(f"sensor.quarterly_peak_month_{i+1}")
+          self.set_sensor_value(f"sensor.quarterly_peak_month_{i}", value)
 
-        friendly_name = self.get_sensor_friendly_name(f"sensor.quarterly_peak_month_{i+1}")
-        self.set_sensor_friendly_name(f"sensor.quarterly_peak_month_{i}", friendly_name)
+          friendly_name = self.get_sensor_friendly_name(f"sensor.quarterly_peak_month_{i+1}")
+          self.set_sensor_friendly_name(f"sensor.quarterly_peak_month_{i}", friendly_name)
 
-      self.set_sensor_value("sensor.quarterly_peak_month_12", self.get_sensor_value("sensor.DSMR_quarterly_peak"))
-      self.set_sensor_friendly_name("sensor.quarterly_peak_month_12", friendly_name_month_12)
+        self.set_sensor_value("sensor.quarterly_peak_month_12", self.get_sensor_value("sensor.DSMR_quarterly_peak"))
+        self.set_sensor_friendly_name("sensor.quarterly_peak_month_12", friendly_name_month_12)
 
-      self.set_sensor_value("sensor.DSMR_quarterly_peak",0)
-      self.set_sensor_friendly_name("sensor.DSMR_quarterly_peak", friendly_name_current_month)
+        self.set_sensor_value("sensor.DSMR_quarterly_peak",0)
+        self.set_sensor_friendly_name("sensor.DSMR_quarterly_peak", friendly_name_current_month)
 
 
-      #Monthly energy prices
-      for i in range(1,12):
-        value = self.get_sensor_value(f"sensor.monthly_energy_price_consumption_normal_{i+1}")
-        self.set_sensor_value(f"sensor.monthly_energy_price_consumption_normal_{i}", value)
+        #Monthly energy prices
+        for i in range(1,12):
+          value = self.get_sensor_value(f"sensor.monthly_energy_price_consumption_normal_{i+1}")
+          self.set_sensor_value(f"sensor.monthly_energy_price_consumption_normal_{i}", value)
 
-      self.set_sensor_value("sensor.monthly_energy_price_consumption_normal_12", self.get_sensor_value("sensor.monthly_energy_price_consumption_normal"))
-      self.set_sensor_friendly_name("sensor.monthly_energy_price_consumption_normal_12", friendly_name_month_12)
+        self.set_sensor_value("sensor.monthly_energy_price_consumption_normal_12", self.get_sensor_value("sensor.monthly_energy_price_consumption_normal"))
+        self.set_sensor_friendly_name("sensor.monthly_energy_price_consumption_normal_12", friendly_name_month_12)
 
-      for i in range(1,12):
-        value = self.get_sensor_value(f"sensor.monthly_energy_price_consumption_low_{i+1}")
-        self.set_sensor_value(f"sensor.monthly_energy_price_consumption_low_{i}", value)
+        for i in range(1,12):
+          value = self.get_sensor_value(f"sensor.monthly_energy_price_consumption_low_{i+1}")
+          self.set_sensor_value(f"sensor.monthly_energy_price_consumption_low_{i}", value)
 
-      self.set_sensor_value("sensor.monthly_energy_price_consumption_low_12", self.get_sensor_value("sensor.monthly_energy_price_consumption_low"))
-      self.set_sensor_friendly_name("sensor.monthly_energy_price_consumption_low_12", friendly_name_month_12)
+        self.set_sensor_value("sensor.monthly_energy_price_consumption_low_12", self.get_sensor_value("sensor.monthly_energy_price_consumption_low"))
+        self.set_sensor_friendly_name("sensor.monthly_energy_price_consumption_low_12", friendly_name_month_12)
 
-      for i in range(1,12):
-        value = self.get_sensor_value(f"sensor.monthly_energy_price_production_normal_{i+1}")
-        self.set_sensor_value(f"sensor.monthly_energy_price_production_normal_{i}", value)
+        for i in range(1,12):
+          value = self.get_sensor_value(f"sensor.monthly_energy_price_production_normal_{i+1}")
+          self.set_sensor_value(f"sensor.monthly_energy_price_production_normal_{i}", value)
 
-      self.set_sensor_value("sensor.monthly_energy_price_production_normal_12", self.get_sensor_value("sensor.monthly_energy_price_production_normal"))
-      self.set_sensor_friendly_name("sensor.monthly_energy_price_production_normal_12", friendly_name_month_12)
+        self.set_sensor_value("sensor.monthly_energy_price_production_normal_12", self.get_sensor_value("sensor.monthly_energy_price_production_normal"))
+        self.set_sensor_friendly_name("sensor.monthly_energy_price_production_normal_12", friendly_name_month_12)
 
-      for i in range(1,12):
-        value = self.get_sensor_value(f"sensor.monthly_energy_price_production_low_{i+1}")
-        self.set_sensor_value(f"sensor.monthly_energy_price_production_low_{i}", value)
+        for i in range(1,12):
+          value = self.get_sensor_value(f"sensor.monthly_energy_price_production_low_{i+1}")
+          self.set_sensor_value(f"sensor.monthly_energy_price_production_low_{i}", value)
 
-      self.set_sensor_value("sensor.monthly_energy_price_production_low_12", self.get_sensor_value("sensor.monthly_energy_price_production_low"))
-      self.set_sensor_friendly_name("sensor.monthly_energy_price_production_low_12", friendly_name_month_12)
+        self.set_sensor_value("sensor.monthly_energy_price_production_low_12", self.get_sensor_value("sensor.monthly_energy_price_production_low"))
+        self.set_sensor_friendly_name("sensor.monthly_energy_price_production_low_12", friendly_name_month_12)
 
-      #Write to namespace and update HA
-      for i in range(1,13):
-        self.write_sensors_to_namespace(f"sensor.quarterly_peak_month_{i}")
-        self.update_sensors_HA(f"sensor.quarterly_peak_month_{i}")
+        #Write to namespace and update HA
+        for i in range(1,13):
+          self.write_sensors_to_namespace(f"sensor.quarterly_peak_month_{i}")
+          self.update_sensors_HA(f"sensor.quarterly_peak_month_{i}")
 
-        self.write_sensors_to_namespace(f"sensor.monthly_energy_price_consumption_normal_{i}")
-        self.update_sensors_HA(f"sensor.monthly_energy_price_consumption_normal_{i}")
+          self.write_sensors_to_namespace(f"sensor.monthly_energy_price_consumption_normal_{i}")
+          self.update_sensors_HA(f"sensor.monthly_energy_price_consumption_normal_{i}")
 
-        self.write_sensors_to_namespace(f"sensor.monthly_energy_price_consumption_low_{i}")
-        self.update_sensors_HA(f"sensor.monthly_energy_price_consumption_low_{i}")
+          self.write_sensors_to_namespace(f"sensor.monthly_energy_price_consumption_low_{i}")
+          self.update_sensors_HA(f"sensor.monthly_energy_price_consumption_low_{i}")
 
-        self.write_sensors_to_namespace(f"sensor.monthly_energy_price_production_normal_{i}")
-        self.update_sensors_HA(f"sensor.monthly_energy_price_production_normal_{i}")
+          self.write_sensors_to_namespace(f"sensor.monthly_energy_price_production_normal_{i}")
+          self.update_sensors_HA(f"sensor.monthly_energy_price_production_normal_{i}")
 
-        self.write_sensors_to_namespace(f"sensor.monthly_energy_price_production_low_{i}")
-        self.update_sensors_HA(f"sensor.monthly_energy_price_production_low_{i}")
+          self.write_sensors_to_namespace(f"sensor.monthly_energy_price_production_low_{i}")
+          self.update_sensors_HA(f"sensor.monthly_energy_price_production_low_{i}")
 
-      self.write_sensors_to_namespace("sensor.DSMR_quarterly_peak")
-      self.update_sensors_HA("sensor.DSMR_quarterly_peak")
+        self.write_sensors_to_namespace("sensor.DSMR_quarterly_peak")
+        self.update_sensors_HA("sensor.DSMR_quarterly_peak")
+    
+    except Exception as e:
+      self.log(f"Error updating monthly values in database: {e}", level="ERROR")
 
 
   def update_quarterly_peak(self, **kwargs):
-    #FOR USE WHEN RECEIVING MONTHLY PEAK FROM MQTT
     '''
-    Listen to the MQTT server and parse the incoming telegrams
+    Update sensor in APPDAEMON with error handling
+    '''
+    try:
+      state = self.get_state("sensor.p1_meter_peak_demand_current_month")
+      
+      if state is None or state == "unavailable" or state == "unknown":
+        self.log("P1 meter peak demand sensor unavailable, skipping update", level="WARNING")
+        return
+      
+      try:
+        value = float(state) / 1000  # conversion from W to kW
+      except (ValueError, TypeError) as e:
+        self.log(f"Failed to convert peak demand to float: {e}", level="ERROR")
+        return
+
+      self.log(f"The peak value is: {value} kW")
+
+      if value != self.get_sensor_value("sensor.DSMR_quarterly_peak"):
+        self.set_sensor_value("sensor.DSMR_quarterly_peak", value)
+        self.write_sensors_to_namespace("sensor.DSMR_quarterly_peak")
+        self.update_sensors_HA("sensor.DSMR_quarterly_peak")
     
-    
-    self.mqtt = self.get_plugin_api("MQTT")
-    self.mqtt.mqtt_subscribe(topic='P1Reader/telegrams') 
-    self.mqtt.listen_event(self.on_telegram, "MQTT_MESSAGE", state='Connected', topic='P1Reader/telegrams') 
-    '''
-
-    #FOR USE WHEN RECEIVING MONTHLY PEAK VIA HA
-    '''
-    Update sensor in APPDAEMON
-    '''
-
-    value = self.get_state("sensor.p1_meter_peak_demand_current_month")
-
-    self.log(f"The peak value is: {value} W")
-
-    if value is not None:
-      value = float(value)/1000 #conversion from W to kW
-
-    if value != self.get_sensor_value("sensor.DSMR_quarterly_peak"):
-      self.set_sensor_value("sensor.DSMR_quarterly_peak", value)
-      self.write_sensors_to_namespace("sensor.DSMR_quarterly_peak")
-      self.update_sensors_HA("sensor.DSMR_quarterly_peak")
+    except Exception as e:
+      self.log(f"Error updating quarterly peak: {e}", level="ERROR")
 
   #!!! Check *args and **kwargs!!
   def on_telegram(self, event_name, data, **kwargs):
     '''
     Parse the incoming telegrams and update the corresponding sensors
     '''
+    try:
+      telegram = data["payload"].strip()
+      
+      pattern = re.compile(r"^1-0:1\.6\.0\(\d+S\)\(\d+\.\d+\*kW\)", re.M)
+      value = re.findall(pattern, telegram)
 
-    telegram = data["payload"].strip()
+      if value:
+        self.log(value)
+
+        pattern = re.compile(r"\d+\.\d+\*kW")
+        m = re.search(pattern, value[0])
     
-    pattern = re.compile(r"^1-0:1\.6\.0\(\d+S\)\(\d+\.\d+\*kW\)", re.M)
-    value = re.findall(pattern, telegram)
+        pattern = re.compile(r"\d+\.\d+")
+        m = re.match(pattern, m.group())
 
-    if value:
-      self.log(value)
+        value = m.group()
 
-      pattern = re.compile(r"\d+\.\d+\*kW")
-      m = re.search(pattern, value[0])
-  
-      pattern = re.compile(r"\d+\.\d+")
-      m = re.match(pattern, m.group())
+        if value != self.get_sensor_value("sensor.DSMR_quarterly_peak"):
+          self.set_sensor_value("sensor.DSMR_quarterly_peak", value)
+          self.write_sensors_to_namespace("sensor.DSMR_quarterly_peak")
+          self.update_sensors_HA("sensor.DSMR_quarterly_peak")
 
-      value = m.group()
-
-      if value != self.get_sensor_value("sensor.DSMR_quarterly_peak"):
-        self.set_sensor_value("sensor.DSMR_quarterly_peak", value)
-        self.write_sensors_to_namespace("sensor.DSMR_quarterly_peak")
-        self.update_sensors_HA("sensor.DSMR_quarterly_peak")
-
-      self.restart_app("update_energy_sensors") #restart app to stop updating
+        self.restart_app("update_energy_sensors") #restart app to stop updating
+    
+    except Exception as e:
+      self.log(f"Error parsing telegram: {e}", level="ERROR")
 
 
   def set_sensors(self, entity_id, value):
     '''
-    for i in range(1,13):
-      name = f"sensor.monthly_energy_price_consumption_normal_{i}"
-      value = self.get_sensor_value(f"sensor.monthly_energy_price_normal_{i}")
-      self.set_sensor_value(name, value)
-      self.write_sensors_to_namespace(name)
-      self.update_sensors_HA(name)
+    Manual sensor setting for debugging
     '''
-
-    self.set_sensor_value(entity_id,value)
-    self.write_sensors_to_namespace(entity_id)
-
+    try:
+      self.set_sensor_value(entity_id, value)
+      self.write_sensors_to_namespace(entity_id)
+    except Exception as e:
+      self.log(f"Error setting sensor {entity_id}: {e}", level="ERROR")
 
 
   def update_self_calculated_quarterly_peak_for_db(self, **kwargs):
     """
     Method to update the sensor 'sensor.electricity_delivery_power_monthly_15m_max' to trigger an update in the HA database 
     """
-
-    value = float(self.get_state("sensor.electricity_delivery_power_monthly_15m_max"))
-    if (date.today().day % 2 == 0 ):
-      self.set_state("sensor.electricity_delivery_power_monthly_15m_max", state=round((value - 0.01), 2), attributes={"unit_of_measurement": "kW","friendly_name": "Electricity Delivery Power Monthly 15m Max"})
-    else:
-      self.set_state("sensor.electricity_delivery_power_monthly_15m_max", state=round((value + 0.01),2), attributes={"unit_of_measurement": "kW","friendly_name": "Electricity Delivery Power Monthly 15m Max"})
-  
+    try:
+      state = self.get_state("sensor.electricity_delivery_power_monthly_15m_max")
+      
+      if state is None or state == "unavailable" or state == "unknown":
+        self.log("Electricity delivery power sensor unavailable", level="WARNING")
+        return
+      
+      try:
+        value = float(state)
+      except (ValueError, TypeError) as e:
+        self.log(f"Failed to convert electricity delivery power to float: {e}", level="ERROR")
+        return
+      
+      if (date.today().day % 2 == 0):
+        new_value = round((value - 0.01), 2)
+      else:
+        new_value = round((value + 0.01), 2)
+      
+      self.set_state("sensor.electricity_delivery_power_monthly_15m_max", 
+                     state=new_value, 
+                     attributes={"unit_of_measurement": "kW",
+                                "friendly_name": "Electricity Delivery Power Monthly 15m Max"})
+    
+    except Exception as e:
+      self.log(f"Error updating self-calculated quarterly peak: {e}", level="ERROR")
 
 
   def set_daily_gas_price(self, **kwargs):
     '''
-    Method to scrape the daily gas price and update the sensor in HA
+    Method to scrape the daily gas price and update the sensor in HA with error handling
     '''
+    try:
+      res = requests.get("https://my.elexys.be/MarketInformation/IceEndexTtfGas.aspx", timeout=10)
+      res.raise_for_status()  # Raise exception for bad status codes
+      
+    except requests.exceptions.Timeout:
+      self.log("Timeout while fetching gas price data", level="ERROR")
+      return
+    except requests.exceptions.RequestException as e:
+      self.log(f"Error fetching gas price data: {e}", level="ERROR")
+      return
     
-    res = requests.get("https://my.elexys.be/MarketInformation/IceEndexTtfGas.aspx")
+    try:
+      soup = bs4.BeautifulSoup(res.text, "lxml")
+      items = soup.select("#contentPlaceHolder_currentPricesMonthGridview_DXDataRow0")
+      
+      if not items:
+        self.log("Gas price element not found on page", level="ERROR")
+        return
+      
+      result = re.search(r"(\d\d),(\d\d)", items[0].text)
+      
+      if not result:
+        self.log(f"Gas price format not recognized in: {items[0].text}", level="ERROR")
+        return
+      
+      value = result.group(1) + '.' + result.group(2)
 
-    soup = bs4.BeautifulSoup(res.text,"lxml")
-
-    items = soup.select("#contentPlaceHolder_currentPricesMonthGridview_DXDataRow0")
-
-    result = re.search(r"(\d\d),(\d\d)",items[0].text)
-
-    value = result.group(1) + '.' + result.group(2)
-
-    if value is not None:
+      if value is not None:
         self.set_sensor_value("sensor.gas_daily_price", value)
         self.write_sensors_to_namespace("sensor.gas_daily_price")
         self.update_sensors_HA("sensor.gas_daily_price")
-
-    return
-
-
-
-
-
+        self.log(f"Updated gas daily price: {value} EUR/MWh")
+    
+    except Exception as e:
+      self.log(f"Error parsing gas price data: {e}", level="ERROR")
