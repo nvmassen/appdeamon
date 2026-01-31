@@ -48,10 +48,6 @@ class UpdateEnergySensors(SensorObject):
     self.run_daily(self.update_self_calculated_quarterly_peak_for_db, "00:00:01")
     #self.run_daily(self.update_self_calculated_quarterly_peak_for_db, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
 
-    #Get daily gasprize from internet and update sensor in HA
-    self.run_daily(self.set_daily_gas_price, "15:45:00")
-    #self.run_daily(self.set_daily_gas_price, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
-
     ###Function to manualy input values in appdaemon database
     #self.set_sensors("sensor.monthly_energy_price_production_low_12", 0.03)
 
@@ -327,32 +323,3 @@ class UpdateEnergySensors(SensorObject):
       self.set_state("sensor.electricity_delivery_power_monthly_15m_max", state=round((value - 0.01), 2), attributes={"unit_of_measurement": "kW","friendly_name": "Electricity Delivery Power Monthly 15m Max"})
     else:
       self.set_state("sensor.electricity_delivery_power_monthly_15m_max", state=round((value + 0.01),2), attributes={"unit_of_measurement": "kW","friendly_name": "Electricity Delivery Power Monthly 15m Max"})
-  
-
-
-  def set_daily_gas_price(self, **kwargs):
-    '''
-    Method to scrape the daily gas price and update the sensor in HA
-    '''
-    
-    res = requests.get("https://my.elexys.be/MarketInformation/IceEndexTtfGas.aspx")
-
-    soup = bs4.BeautifulSoup(res.text,"lxml")
-
-    items = soup.select("#contentPlaceHolder_currentPricesMonthGridview_DXDataRow0")
-
-    result = re.search(r"(\d\d),(\d\d)",items[0].text)
-
-    value = result.group(1) + '.' + result.group(2)
-
-    if value is not None:
-        self.set_sensor_value("sensor.gas_daily_price", value)
-        self.write_sensors_to_namespace("sensor.gas_daily_price")
-        self.update_sensors_HA("sensor.gas_daily_price")
-
-    return
-
-
-
-
-
