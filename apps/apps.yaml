@@ -13,4 +13,12 @@ energy_management_EV:
   module: energy_management_EV
   class: EnergyManagementEV
 
+# OpenClaw Control - REST API for entity control
+openclaw_control:
+  module: openclaw_control
+  class: OpenClawControl
+  api_key: !secret openclaw_api_key  # Add to secrets.yaml: openclaw_api_key: "your-secret-key"
+  entities:
+    - light.living_eettafel
+
 
