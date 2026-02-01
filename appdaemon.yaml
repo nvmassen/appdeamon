@@ -1,0 +1,19 @@
+---
+appdaemon:
+  latitude: !secret latitude
+  longitude: !secret longitude
+  elevation: 2
+  time_zone: Europe/Amsterdam
+  plugins:
+    HASS:
+      type: hass
+      token: !env_var SUPERVISOR_TOKEN
+  namespaces:
+    ha_sensors:
+      # writeback is safe, performance or hybrid
+      writeback: safe
+http:
+  url: http://0.0.0.0:5050
+admin:
+api:
+  port: 5050
