@@ -19,6 +19,12 @@ openclaw_control:
   class: OpenClawControl
   api_key: !secret openclaw_api_key  # Add to secrets.yaml: openclaw_api_key: "your-secret-key"
   entities:
+    # All lights from Home Assistant
     - light.living_eettafel
+    - light.slaapkamer_ouders
+    - light.tv_hoek
+    - light.veranda
+    - light.kelder
+    - light.keuken
 
 
