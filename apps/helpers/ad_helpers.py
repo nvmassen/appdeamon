@@ -58,7 +58,7 @@ class SensorObject(hass.Hass):
     def update_sensors_HA(self, *args):
         for key in args:    
             sensor = self.sensors[key]
-            self.set_state(sensor.name, state=sensor.value, attributes={"unit_of_measurement": sensor.unit_of_measurement,"friendly_name": sensor.friendly_name})
+            self.set_state(sensor.name, state=str(sensor.value), attributes={"unit_of_measurement": sensor.unit_of_measurement,"friendly_name": sensor.friendly_name})
     
 
     def get_sensors(self):

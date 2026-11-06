@@ -1,0 +1,21 @@
+---
+appdaemon:
+  latitude: !secret latitude
+  longitude: !secret longitude
+  elevation: 2
+  time_zone: Europe/Amsterdam
+  # production_mode: true  # disabled 2026-08-22 - suspected cause of apps not loading
+  plugins:
+    HASS:
+      type: hass
+      token: !env_var SUPERVISOR_TOKEN
+  namespaces:
+    ha_sensors:
+      # writeback is safe or hybrid
+      writeback: safe
+      persistent: true
+http:
+  url: http://0.0.0.0:5050
+admin:
+api:
+  port: 5050

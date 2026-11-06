@@ -48,10 +48,6 @@ class UpdateEnergySensors(SensorObject):
     self.run_daily(self.update_self_calculated_quarterly_peak_for_db, "00:00:01")
     #self.run_daily(self.update_self_calculated_quarterly_peak_for_db, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
 
-    #Get daily gasprize from internet and update sensor in HA
-    self.run_daily(self.set_daily_gas_price, "15:45:00")
-    #self.run_daily(self.set_daily_gas_price, (datetime.now() + timedelta(seconds=3)).time().strftime("%H:%M:%S"))
-
     ###Function to manualy input values in appdaemon database
     #self.set_sensors("sensor.monthly_energy_price_production_low_12", 0.03)
 
@@ -387,44 +383,3 @@ class UpdateEnergySensors(SensorObject):
     
     except Exception as e:
       self.log(f"Error updating self-calculated quarterly peak: {e}", level="ERROR")
-
-
-  def set_daily_gas_price(self, **kwargs):
-    '''
-    Method to scrape the daily gas price and update the sensor in HA with error handling
-    '''
-    try:
-      res = requests.get("https://my.elexys.be/MarketInformation/IceEndexTtfGas.aspx", timeout=10)
-      res.raise_for_status()  # Raise exception for bad status codes
-      
-    except requests.exceptions.Timeout:
-      self.log("Timeout while fetching gas price data", level="ERROR")
-      return
-    except requests.exceptions.RequestException as e:
-      self.log(f"Error fetching gas price data: {e}", level="ERROR")
-      return
-    
-    try:
-      soup = bs4.BeautifulSoup(res.text, "lxml")
-      items = soup.select("#contentPlaceHolder_currentPricesMonthGridview_DXDataRow0")
-      
-      if not items:
-        self.log("Gas price element not found on page", level="ERROR")
-        return
-      
-      result = re.search(r"(\d\d),(\d\d)", items[0].text)
-      
-      if not result:
-        self.log(f"Gas price format not recognized in: {items[0].text}", level="ERROR")
-        return
-      
-      value = result.group(1) + '.' + result.group(2)
-
-      if value is not None:
-        self.set_sensor_value("sensor.gas_daily_price", value)
-        self.write_sensors_to_namespace("sensor.gas_daily_price")
-        self.update_sensors_HA("sensor.gas_daily_price")
-        self.log(f"Updated gas daily price: {value} EUR/MWh")
-    
-    except Exception as e:
-      self.log(f"Error parsing gas price data: {e}", level="ERROR")
