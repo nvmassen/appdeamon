@@ -1,12 +1,6 @@
-from statistics import mean
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date  # timedelta: used by the commented-out test schedules
 from helpers.ad_helpers import SensorObject, EnergySensor
-import re
 import calendar
-import requests
-import bs4
-from collections.abc import Mapping, MutableMapping
-import sys
 
 class UpdateEnergySensors(SensorObject):
 
@@ -309,39 +303,6 @@ class UpdateEnergySensors(SensorObject):
     
     except Exception as e:
       self.log(f"Error updating quarterly peak: {e}", level="ERROR")
-
-  #!!! Check *args and **kwargs!!
-  def on_telegram(self, event_name, data, **kwargs):
-    '''
-    Parse the incoming telegrams and update the corresponding sensors
-    '''
-    try:
-      telegram = data["payload"].strip()
-      
-      pattern = re.compile(r"^1-0:1\.6\.0\(\d+S\)\(\d+\.\d+\*kW\)", re.M)
-      value = re.findall(pattern, telegram)
-
-      if value:
-        self.log(value)
-
-        pattern = re.compile(r"\d+\.\d+\*kW")
-        m = re.search(pattern, value[0])
-    
-        pattern = re.compile(r"\d+\.\d+")
-        m = re.match(pattern, m.group())
-
-        value = m.group()
-
-        if value != self.get_sensor_value("sensor.DSMR_quarterly_peak"):
-          self.set_sensor_value("sensor.DSMR_quarterly_peak", value)
-          self.write_sensors_to_namespace("sensor.DSMR_quarterly_peak")
-          self.update_sensors_HA("sensor.DSMR_quarterly_peak")
-
-        self.restart_app("update_energy_sensors") #restart app to stop updating
-    
-    except Exception as e:
-      self.log(f"Error parsing telegram: {e}", level="ERROR")
-
 
   def set_sensors(self, entity_id, value):
     '''

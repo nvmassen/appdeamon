@@ -1,5 +1,4 @@
 import appdaemon.plugins.hass.hassapi as hass
-from collections.abc import Mapping
 
 class SensorObject(hass.Hass):
 
@@ -56,9 +55,11 @@ class SensorObject(hass.Hass):
 
 
     def update_sensors_HA(self, *args):
-        for key in args:    
+        # check_existence=False: these sensors exist only while AppDaemon sets them, so HA
+        # does not know them after a restart. Creating them is expected; skip the warning.
+        for key in args:
             sensor = self.sensors[key]
-            self.set_state(sensor.name, state=str(sensor.value), attributes={"unit_of_measurement": sensor.unit_of_measurement,"friendly_name": sensor.friendly_name})
+            self.set_state(sensor.name, state=str(sensor.value), attributes={"unit_of_measurement": sensor.unit_of_measurement,"friendly_name": sensor.friendly_name}, check_existence=False)
     
 
     def get_sensors(self):
@@ -80,18 +81,3 @@ class EnergySensor():
     def __str__(self):
         output = f"Name: {self.name}\nFriendly name: {self.friendly_name}\nValue: {self.value}\nUnit: {self.unit_of_measurement}"
         return output
-    
-    
-# A python program to create user-defined exceptions
-# class LookUpError is derived from super class Exception
-class AvailabilityError(Exception):
- 
-    # Constructor or Initializer
-    def __init__(self, value):
-        self.value = value
- 
-    # __str__ is to print() the value
-    def __str__(self):
-        return(repr(self.value))
- 
- 
