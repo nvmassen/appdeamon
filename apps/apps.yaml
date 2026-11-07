@@ -8,11 +8,6 @@ update_energy_sensors:
   module: update_energy_sensors
   class: UpdateEnergySensors
 
-energy_management_EV:
-  path_to_config: '/config/energy_management_EV_config.json'
-  module: energy_management_EV
-  class: EnergyManagementEV
-
 # OpenClaw Control - REST API for entity control
 # Endpoints: /api/appdaemon/{light,switch,cover,climate,fan,status}
 openclaw_control:

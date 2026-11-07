@@ -1,1 +1,0 @@
-NO_CHARGING = 'no_charging'
