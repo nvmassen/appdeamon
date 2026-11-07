@@ -17,5 +17,3 @@ appdaemon:
 http:
   url: http://0.0.0.0:5050
 admin:
-api:
-  port: 5050

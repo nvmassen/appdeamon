@@ -1,31 +1,5 @@
 ---
 
-#test_app:
-#  module: test
-#  class: light_on
-
 update_energy_sensors:
   module: update_energy_sensors
   class: UpdateEnergySensors
-
-# OpenClaw Control - REST API for entity control
-# Endpoints: /api/appdaemon/{light,switch,cover,climate,fan,status}
-openclaw_control:
-  module: openclaw_control
-  class: OpenClawControl
-  api_key: !secret openclaw_api_key
-  # Entities organized by domain
-  lights:
-    - light.living_eettafel
-    - light.slaapkamer_ouders
-    - light.tv_hoek
-    - light.veranda
-    - light.kelder
-    - light.keuken
-  switches:
-    - switch.staanlamp_living
-  covers: []
-  climates: []
-  fans: []
-
-
