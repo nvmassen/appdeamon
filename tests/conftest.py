@@ -18,14 +18,19 @@ class FakeHass:
 
     def __init__(self, *args, **kwargs):
         self.ha_states = {}  # HA entity states, as strings (like HA gives them)
+        self.ha_attributes = {}  # {entity_id: {attribute: value}}, returned by get_state(..., attribute="all")
         self.namespaces = {}  # {namespace: {entity_id: state}}
         self.ha_written = {}  # {entity_id: {"state": ..., "attributes": ...}} written to HA
         self.logs = []  # [(level, message)]
         self.schedules = []  # [(callback name, time)]
 
-    def get_state(self, entity_id, namespace=None, **kwargs):
+    def get_state(self, entity_id, namespace=None, attribute=None, **kwargs):
         if namespace:
             return self.namespaces.get(namespace, {}).get(entity_id)
+        if attribute == "all":
+            if entity_id not in self.ha_states:
+                return None
+            return {"state": self.ha_states[entity_id], "attributes": self.ha_attributes.get(entity_id, {})}
         return self.ha_states.get(entity_id)
 
     def set_state(self, entity_id, state=None, attributes=None, namespace=None, **kwargs):

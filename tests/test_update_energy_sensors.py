@@ -2,12 +2,6 @@ import pytest
 
 import update_energy_sensors as ues
 
-TARIFFS = {
-    "sensor.consumption_tarive_normal": "0.48",
-    "sensor.consumption_tarive_low": "0.43",
-    "sensor.production_tarive_normal": "0.20",
-    "sensor.production_tarive_low": "0.10",
-}
 MONTHLY = "sensor.monthly_energy_price_"
 
 
@@ -31,9 +25,7 @@ def test_initialize_schedules_all_jobs(freeze_today):
     app.initialize()
     names = sorted(name for name, _ in app.schedules)
     assert names == sorted([
-        "update_belpex_monthly_price",
-        "update_monthly_energy_prices",
-        "update_monthly_values_db",
+        "check_month_rollover",
         "update_quarterly_peak",
         "update_quarterly_peak",
         "update_self_calculated_quarterly_peak_for_db",
@@ -43,10 +35,18 @@ def test_initialize_schedules_all_jobs(freeze_today):
 def test_initialize_reads_namespace_and_pushes_to_ha(freeze_today):
     freeze_today(ues, 2026, 11, 7)
     app = ues.UpdateEnergySensors()
-    app.namespaces["ha_sensors"] = {"sensor.belpex_monthly_price": 123.4}
+    app.namespaces["ha_sensors"] = {"sensor.quarterly_peak_month_12": 2.76}
     app.initialize()
-    assert app.get_sensor_value("sensor.belpex_monthly_price") == 123.4
-    assert app.ha_written["sensor.belpex_monthly_price"]["state"] == "123.4"
+    assert app.get_sensor_value("sensor.quarterly_peak_month_12") == 2.76
+    assert app.ha_written["sensor.quarterly_peak_month_12"]["state"] == "2.76"
+
+
+def test_initialize_does_not_write_the_monthly_prices_owned_by_ha(freeze_today):
+    freeze_today(ues, 2026, 11, 7)
+    app = ues.UpdateEnergySensors()
+    app.initialize()
+    assert "sensor.belpex_monthly_price" not in app.ha_written
+    assert f"{MONTHLY}consumption_normal" not in app.ha_written
 
 
 @pytest.mark.parametrize("month, year, first, last", [
@@ -61,109 +61,10 @@ def test_history_labels_cover_the_last_12_months(freeze_today, month, year, firs
     assert app.get_sensor_friendly_name(f"{MONTHLY}production_low_12") == last
 
 
-# --- update_belpex_monthly_price
+# --- month rollover
 
 
-def test_belpex_running_average(freeze_today):
-    app = make_app(freeze_today, 7)
-    app.set_sensor_value("sensor.belpex_monthly_price", 100.0)
-    app.set_sensor_value("sensor.belpex_monthly_price_amount_of_days", 2)
-    app.ha_states["sensor.belpex_daily_price"] = "160"
-    app.update_belpex_monthly_price()
-    assert app.get_sensor_value("sensor.belpex_monthly_price_amount_of_days") == 3
-    assert app.get_sensor_value("sensor.belpex_monthly_price") == 120.0
-    assert app.namespaces["ha_sensors"]["sensor.belpex_monthly_price"] == 120.0
-    assert app.ha_written["sensor.belpex_monthly_price"]["state"] == "120.0"
-
-
-def test_belpex_first_of_month_starts_a_new_average(freeze_today):
-    app = make_app(freeze_today, 1)
-    app.set_sensor_value("sensor.belpex_monthly_price", 100.0)
-    app.set_sensor_value("sensor.belpex_monthly_price_amount_of_days", 30)
-    app.ha_states["sensor.belpex_daily_price"] = "80.5"
-    app.update_belpex_monthly_price()
-    assert app.get_sensor_value("sensor.belpex_monthly_price_amount_of_days") == 1
-    assert app.get_sensor_value("sensor.belpex_monthly_price") == 80.5
-
-
-def test_belpex_zero_price_does_not_count_as_a_day(freeze_today):
-    app = make_app(freeze_today, 7)
-    app.set_sensor_value("sensor.belpex_monthly_price", 100.0)
-    app.set_sensor_value("sensor.belpex_monthly_price_amount_of_days", 2)
-    app.ha_states["sensor.belpex_daily_price"] = "0"
-    app.update_belpex_monthly_price()
-    assert app.get_sensor_value("sensor.belpex_monthly_price_amount_of_days") == 2
-    assert app.get_sensor_value("sensor.belpex_monthly_price") == 100.0
-
-
-@pytest.mark.parametrize("state", [None, "unavailable", "unknown", "not a number"])
-def test_belpex_bad_daily_price_changes_nothing(freeze_today, state):
-    app = make_app(freeze_today, 7)
-    app.set_sensor_value("sensor.belpex_monthly_price", 100.0)
-    app.ha_states["sensor.belpex_daily_price"] = state
-    app.update_belpex_monthly_price()
-    assert app.get_sensor_value("sensor.belpex_monthly_price") == 100.0
-    assert app.ha_written == {}
-    assert any(level in ("WARNING", "ERROR") for level, _ in app.logs)
-
-
-# --- update_monthly_energy_prices
-
-
-def test_energy_prices_running_average(freeze_today):
-    app = make_app(freeze_today, 7)
-    for kind in ("consumption_normal", "consumption_low", "production_normal", "production_low"):
-        app.set_sensor_value(f"{MONTHLY}{kind}", 0.30)
-    app.set_sensor_value(f"{MONTHLY}amount_of_days", 2)
-    app.ha_states.update(TARIFFS)
-    app.update_monthly_energy_prices()
-    assert errors(app) == []
-    assert app.get_sensor_value(f"{MONTHLY}amount_of_days") == 3
-    assert app.get_sensor_value(f"{MONTHLY}consumption_normal") == 0.36  # (0.30*2 + 0.48) / 3
-    assert app.get_sensor_value(f"{MONTHLY}production_low") == 0.23  # (0.30*2 + 0.10) / 3
-    assert app.ha_written[f"{MONTHLY}amount_of_days"]["state"] == "3"
-
-
-def test_energy_prices_first_of_month_starts_a_new_average(freeze_today):
-    app = make_app(freeze_today, 1)
-    app.set_sensor_value(f"{MONTHLY}consumption_normal", 0.30)
-    app.set_sensor_value(f"{MONTHLY}amount_of_days", 31)
-    app.ha_states.update(TARIFFS)
-    app.update_monthly_energy_prices()
-    assert app.get_sensor_value(f"{MONTHLY}amount_of_days") == 1
-    assert app.get_sensor_value(f"{MONTHLY}consumption_normal") == 0.48
-
-
-@pytest.mark.parametrize("sensor, value", [
-    ("sensor.production_tarive_low", "0"),
-    ("sensor.production_tarive_normal", "0"),
-    ("sensor.consumption_tarive_low", "0.0"),
-    # Before the fix, only production_low was compared with 0, so this day counted
-    ("sensor.production_tarive_normal", "-0.02"),
-])
-def test_energy_prices_skip_the_day_unless_all_tariffs_are_positive(freeze_today, sensor, value):
-    app = make_app(freeze_today, 7)
-    app.set_sensor_value(f"{MONTHLY}production_normal", 0.10)
-    app.set_sensor_value(f"{MONTHLY}amount_of_days", 2)
-    app.ha_states.update(TARIFFS)
-    app.ha_states[sensor] = value
-    app.update_monthly_energy_prices()
-    assert app.get_sensor_value(f"{MONTHLY}amount_of_days") == 2
-    assert app.get_sensor_value(f"{MONTHLY}production_normal") == 0.10
-
-
-@pytest.mark.parametrize("state", [None, "unavailable", "unknown", "abc"])
-def test_energy_prices_bad_tariff_changes_nothing(freeze_today, state):
-    app = make_app(freeze_today, 7)
-    app.set_sensor_value(f"{MONTHLY}amount_of_days", 2)
-    app.ha_states.update(TARIFFS)
-    app.ha_states["sensor.consumption_tarive_low"] = state
-    app.update_monthly_energy_prices()
-    assert app.get_sensor_value(f"{MONTHLY}amount_of_days") == 2
-    assert app.ha_written == {}
-
-
-# --- update_monthly_values_db
+KINDS = ("consumption_normal", "consumption_low", "production_normal", "production_low")
 
 
 def fill_history(app):
@@ -171,14 +72,50 @@ def fill_history(app):
         app.set_sensor_value(f"sensor.quarterly_peak_month_{i}", float(i))
         app.set_sensor_value(f"{MONTHLY}consumption_normal_{i}", i / 100)
     app.set_sensor_value("sensor.DSMR_quarterly_peak", 4.2)
-    app.set_sensor_value(f"{MONTHLY}consumption_normal", 0.55)
+
+
+def set_ha_price(app, kind, state, month, previous_month=None, previous_value=None):
+    """HA template sensor for a monthly price: state for its month, previous_* for the closed month."""
+    app.ha_states[f"{MONTHLY}{kind}"] = state
+    app.ha_attributes[f"{MONTHLY}{kind}"] = {
+        "month": month, "previous_month": previous_month, "previous_value": previous_value}
+
+
+def set_ha_prices_still_in(app, month, value=0.55):
+    for kind in KINDS:
+        set_ha_price(app, kind, str(value), month)
+
+
+def rollover_months(app):
+    return app.namespaces["ha_sensors"]["sensor.monthly_rollover_month"]
+
+
+def test_first_run_stores_the_month_without_rollover(freeze_today):
+    app = make_app(freeze_today, 7)
+    fill_history(app)
+    app.check_month_rollover()
+    assert rollover_months(app) == "2026-11"
+    assert app.get_sensor_value("sensor.quarterly_peak_month_12") == 12.0
+    assert app.ha_written == {}
+
+
+def test_no_rollover_in_the_same_month(freeze_today):
+    app = make_app(freeze_today, 2)
+    fill_history(app)
+    app.set_rollover_month("2026-11")
+    app.check_month_rollover()
+    assert app.get_sensor_value("sensor.quarterly_peak_month_12") == 12.0
+    assert app.ha_written == {}
 
 
 def test_month_rollover_shifts_history_by_one(freeze_today):
     app = make_app(freeze_today, 1, 11, 2026)
     fill_history(app)
-    app.update_monthly_values_db()
+    set_ha_prices_still_in(app, "2026-10")
+    app.set_rollover_month("2026-10")
+    app.check_month_rollover()
     assert errors(app) == []
+    assert rollover_months(app) == "2026-11"
     assert app.get_sensor_value("sensor.quarterly_peak_month_1") == 2.0
     assert app.get_sensor_value("sensor.quarterly_peak_month_11") == 12.0
     assert app.get_sensor_value("sensor.quarterly_peak_month_12") == 4.2
@@ -188,22 +125,64 @@ def test_month_rollover_shifts_history_by_one(freeze_today):
     assert app.get_sensor_friendly_name("sensor.quarterly_peak_month_12") == "October 2026"
     assert app.get_sensor_friendly_name("sensor.DSMR_quarterly_peak") == "November 2026"
     assert app.ha_written["sensor.quarterly_peak_month_12"]["state"] == "4.2"
+    assert app.namespaces["ha_sensors"][f"{MONTHLY}production_low_12"] == 0.55
 
 
 def test_month_rollover_in_january_labels_december_of_last_year(freeze_today):
     app = make_app(freeze_today, 1, 1, 2027)
     fill_history(app)
-    app.update_monthly_values_db()
+    set_ha_prices_still_in(app, "2026-12")
+    app.set_rollover_month("2026-12")
+    app.check_month_rollover()
+    assert rollover_months(app) == "2027-01"
     assert app.get_sensor_friendly_name("sensor.quarterly_peak_month_12") == "December 2026"
     assert app.get_sensor_friendly_name("sensor.DSMR_quarterly_peak") == "January 2027"
 
 
-def test_no_rollover_after_the_first(freeze_today):
-    app = make_app(freeze_today, 2)
+def test_missed_first_of_month_is_caught_up_later(freeze_today):
+    # AppDaemon was down on 1 Nov; the HA sensors already started November and keep October in previous_*
+    app = make_app(freeze_today, 7, 11, 2026)
     fill_history(app)
-    app.update_monthly_values_db()
-    assert app.get_sensor_value("sensor.quarterly_peak_month_12") == 12.0
-    assert app.ha_written == {}
+    for kind in KINDS:
+        set_ha_price(app, kind, "0.47", "2026-11", previous_month="2026-10", previous_value=0.39)
+    app.set_rollover_month("2026-10")
+    app.check_month_rollover()
+    assert errors(app) == []
+    assert rollover_months(app) == "2026-11"
+    assert app.get_sensor_value("sensor.quarterly_peak_month_12") == 4.2
+    assert app.get_sensor_value(f"{MONTHLY}consumption_normal_12") == 0.39
+    assert app.get_sensor_friendly_name(f"{MONTHLY}consumption_normal_12") == "October 2026"
+
+
+def test_two_missed_months_shift_twice_and_warn_for_the_unknown_month(freeze_today):
+    app = make_app(freeze_today, 3, 12, 2026)
+    fill_history(app)
+    for kind in KINDS:
+        set_ha_price(app, kind, "0.47", "2026-12", previous_month="2026-11", previous_value=0.45)
+    app.set_rollover_month("2026-10")
+    app.check_month_rollover()
+    assert rollover_months(app) == "2026-12"
+    assert app.get_sensor_value("sensor.quarterly_peak_month_10") == 12.0
+    assert app.get_sensor_value("sensor.quarterly_peak_month_11") == 4.2  # October
+    assert app.get_sensor_value(f"{MONTHLY}consumption_normal_11") == 0  # October price is no longer in HA
+    assert app.get_sensor_value(f"{MONTHLY}consumption_normal_12") == 0.45  # November
+    assert app.get_sensor_friendly_name("sensor.quarterly_peak_month_11") == "October 2026"
+    assert app.get_sensor_friendly_name("sensor.quarterly_peak_month_12") == "November 2026"
+    assert any(level == "WARNING" and "2026-10" in msg for level, msg in app.logs)
+
+
+@pytest.mark.parametrize("state, attributes", [
+    (None, None),  # sensor missing in HA
+    ("unavailable", {"month": "2026-10"}),
+    ("0.40", {"month": "2026-09"}),  # neither the current nor the previous month matches
+])
+def test_closed_month_price_without_a_value_is_0_with_a_warning(freeze_today, state, attributes):
+    app = make_app(freeze_today, 1)
+    if state is not None:
+        app.ha_states[f"{MONTHLY}consumption_low"] = state
+        app.ha_attributes[f"{MONTHLY}consumption_low"] = attributes
+    assert app.get_closed_month_price(f"{MONTHLY}consumption_low", "2026-10") == 0
+    assert any(level == "WARNING" for level, _ in app.logs)
 
 
 # --- update_quarterly_peak
