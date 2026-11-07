@@ -175,7 +175,10 @@ class UpdateEnergySensors(SensorObject):
         monthly_energy_price_production_low = self.get_sensor_value("sensor.monthly_energy_price_production_low")
         monthly_energy_price_amount_of_days = self.get_sensor_value("sensor.monthly_energy_price_amount_of_days")
 
-      if (daily_energy_price_consumption_normal and daily_energy_price_consumption_low  and daily_energy_price_production_normal  and daily_energy_price_production_low) > 0:
+      # Skip the day unless all 4 tariffs are above 0 (0 means the price feed failed)
+      daily_prices = (daily_energy_price_consumption_normal, daily_energy_price_consumption_low,
+                      daily_energy_price_production_normal, daily_energy_price_production_low)
+      if all(price > 0 for price in daily_prices):
         monthly_energy_price_amount_of_days += 1
         monthly_energy_price_consumption_normal = round((monthly_energy_price_consumption_normal * (monthly_energy_price_amount_of_days-1) + daily_energy_price_consumption_normal) / monthly_energy_price_amount_of_days, 2)
         monthly_energy_price_consumption_low = round((monthly_energy_price_consumption_low * (monthly_energy_price_amount_of_days-1) + daily_energy_price_consumption_low) / monthly_energy_price_amount_of_days, 2)
