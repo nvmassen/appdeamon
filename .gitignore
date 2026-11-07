@@ -1,0 +1,11 @@
+# Runtime state and generated files
+namespaces/
+dashboards/
+compiled/
+www/
+__pycache__/
+.pytest_cache/
+
+# Local settings and secrets
+.vscode/
+secrets.yaml
